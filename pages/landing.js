@@ -26,7 +26,7 @@ export default function Landing() {
       dataLabels: {
         enabled: true,
         offsetX: -6,
-        style: { fontSize: '10px', colors: ['#00000'] },
+        style: { fontSize: '10px', colors: ['#000000'] },
       },
       stroke: { show: true, width: 1, colors: ['#fff'] },
       tooltip: { shared: true, intersect: false },
