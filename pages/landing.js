@@ -60,36 +60,60 @@ export default function Landing() {
   }, [selectedIndex]); // Add selectedIndex to dependencies to refetch when it changes
 
   useEffect(() => {
-    if (data && selectedExpiry) {
-      const options = data.records?.data || [];
-      const filtered = options.filter((option) => option.expiryDate === selectedExpiry);
-      setFilteredData(filtered);
-    }
-  }, [selectedExpiry, data]);
-
   useEffect(() => {
-    if (filteredData.length > 0) {
-      const strikePrices = filteredData.map((option) => option.strikePrice);
-      const ceOpenInterest = filteredData.map((option) => option.CE?.openInterest || 0);
-      const peOpenInterest = filteredData.map((option) => option.PE?.openInterest || 0);
-      const cechOpenInterest = filteredData.map((option) => option.CE?.changeinOpenInterest || 0);
-      const pechOpenInterest = filteredData.map((option) => option.PE?.changeinOpenInterest || 0);
+  if (data && selectedExpiry) {
+    const options = data.records?.data || [];
+    const filtered = options.filter((option) => option.expiryDate === selectedExpiry);
+    setFilteredData(filtered);
+  }
+}, [selectedExpiry, data]);
 
-      setChartData({
-        ...chartData,
-        series: [
-          { name: 'CE Open Interest', data: ceOpenInterest },
-          { name: 'PE Open Interest', data: peOpenInterest },
-          { name: 'CE Change Open Interest', data: cechOpenInterest },
-          { name: 'PE Change Open Interest', data: pechOpenInterest },
-        ],
-        options: {
-          ...chartData.options,
-          xaxis: { categories: strikePrices },
-        },
-      });
-    }
-  }, [filteredData]);
+useEffect(() => {
+  if (filteredData.length > 0) {
+    // Get the underlying value (this may vary depending on your API structure)
+    const underlyingValue = data.records?.underlyingValue || 0;
+
+    // Get an array of strike prices
+    const strikePrices = filteredData.map((option) => option.strikePrice);
+
+    // Find the closest strike price to the underlying value
+    const closestStrikePrice = strikePrices.reduce((prev, curr) => 
+      Math.abs(curr - underlyingValue) < Math.abs(prev - underlyingValue) ? curr : prev
+    );
+
+    // Find the index of the closest strike price
+    const currentIndex = strikePrices.indexOf(closestStrikePrice);
+
+    // Get 3 strike prices before and 3 after the current strike price
+    const start = Math.max(0, currentIndex - 3);
+    const end = Math.min(filteredData.length, currentIndex + 4); // +4 to include current strike price and 3 after
+
+    // Filter the options for the selected strike prices
+    const filteredStrikeRange = filteredData.slice(start, end);
+
+    // Map values from the filtered range
+    const ceOpenInterest = filteredStrikeRange.map((option) => option.CE?.openInterest || 0);
+    const peOpenInterest = filteredStrikeRange.map((option) => option.PE?.openInterest || 0);
+    const cechOpenInterest = filteredStrikeRange.map((option) => option.CE?.changeinOpenInterest || 0);
+    const pechOpenInterest = filteredStrikeRange.map((option) => option.PE?.changeinOpenInterest || 0);
+
+    // Update chart data
+    setChartData({
+      ...chartData,
+      series: [
+        { name: 'CE Open Interest', data: ceOpenInterest },
+        { name: 'PE Open Interest', data: peOpenInterest },
+        { name: 'CE Change Open Interest', data: cechOpenInterest },
+        { name: 'PE Change Open Interest', data: pechOpenInterest },
+      ],
+      options: {
+        ...chartData.options,
+        xaxis: { categories: filteredStrikeRange.map(option => option.strikePrice) },
+      },
+    });
+  }
+}, [filteredData]);
+
 
   const handleExpiryChange = (event) => {
     setSelectedExpiry(event.target.value);
