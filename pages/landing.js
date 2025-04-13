@@ -1,9 +1,52 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import axios from 'axios';
 import dynamic from 'next/dynamic';
 
 // Dynamically import ReactApexChart to avoid SSR issues
 const ReactApexChart = dynamic(() => import('react-apexcharts'), { ssr: false });
+
+/**
+ * Adjust the brightness of a hex color.
+ * If factor < 1 the color is darkened; if factor > 1 the color is lightened.
+ */
+function adjustColorBrightness(hex, factor) {
+  let color = hex.startsWith('#') ? hex.slice(1) : hex;
+  if (color.length === 3) {
+    color = color.split('').map(ch => ch + ch).join('');
+  }
+  let r = parseInt(color.substring(0, 2), 16);
+  let g = parseInt(color.substring(2, 4), 16);
+  let b = parseInt(color.substring(4, 6), 16);
+
+  r = Math.min(255, Math.max(0, Math.floor(r * factor)));
+  g = Math.min(255, Math.max(0, Math.floor(g * factor)));
+  b = Math.min(255, Math.max(0, Math.floor(b * factor)));
+
+  return `#${((1 << 24) + (r << 16) + (g << 8) + b)
+    .toString(16)
+    .slice(1)
+    .toUpperCase()}`;
+}
+
+/**
+ * For increases: map a percentage change (0 to maxPct) to a darkening factor.
+ * At 0% change, factor = 1; at maxPct change, factor = 0.7.
+ */
+function getDarkenFactor(pct) {
+  const maxPct = 0.5;
+  const ratio = Math.min(pct, maxPct) / maxPct; // value between 0 and 1
+  return 1 - 0.3 * ratio; // from 1 to 0.7
+}
+
+/**
+ * For decreases: map a percentage change (0 to maxPct) to a lightening factor.
+ * At 0% change, factor = 1; at maxPct change, factor = 1.3.
+ */
+function getLightenFactor(pct) {
+  const maxPct = 0.5;
+  const ratio = Math.min(pct, maxPct) / maxPct;
+  return 1 + 0.3 * ratio; // from 1 to 1.3
+}
 
 export default function Landing() {
   const [data, setData] = useState([]);
@@ -11,12 +54,13 @@ export default function Landing() {
   const [filteredData, setFilteredData] = useState([]);
   const [selectedIndex, setSelectedIndex] = useState('');
   const [pcr, setPcr] = useState('');
+  const [liveData, setLiveData] = useState('');
   const [chartData, setChartData] = useState({
     series: [
-      { name: 'CE Open Interest', data: [] },
-      { name: 'PE Open Interest', data: [] },
-      { name: 'CE Change Open Interest', data: [] },
-      { name: 'PE Change Open Interest', data: [] },
+      { name: 'CE Open Interest', data: [], color: '#FF0000' }, // Red for CE
+      { name: 'PE Open Interest', data: [], color: '#008000' }, // Green for PE
+      { name: 'CE Change Open Interest', data: [], color: '#FFA500' }, // Orange for change in CE
+      { name: 'PE Change Open Interest', data: [], color: '#0000FF' }, // Blue for change in PE
     ],
     options: {
       chart: { type: 'bar' },
@@ -41,6 +85,13 @@ export default function Landing() {
   const [futuresData, setFuturesData] = useState(null);
   const [selectedFuturesExpiry, setSelectedFuturesExpiry] = useState('');
   const [filteredFuturesData, setFilteredFuturesData] = useState([]);
+
+  // highlightMap: keys formatted as `${seriesIndex}-${dataPointIndex}`
+  // Values: { type: 'increase' | 'decrease', updatedAt: timestamp, pct: percentageChange }
+  const [highlightMap, setHighlightMap] = useState({});
+
+  // Reference to previous series values.
+  const prevSeriesRef = useRef([]);
 
   // Handler for selecting an index
   const handleIndex = (event) => {
@@ -87,8 +138,10 @@ export default function Landing() {
       if (!selectedSymbol || !isMounted) return;
       try {
         const response = await axios.get(`/api/futures-data?symbol=${selectedSymbol}`);
+        const response1 = await axios.get(`/api/live_data?symbol=${selectedSymbol}`);
         if (isMounted) {
           setFuturesData(response.data);
+          setLiveData(response1.data);
         }
       } catch (error) {
         console.error('Error fetching futures data:', error.message);
@@ -154,10 +207,10 @@ export default function Landing() {
       const peOpenInterest = filteredStrikeRange.map(
         (option) => option.PE?.openInterest || 0
       );
-      const cechOpenInterest = filteredStrikeRange.map(
+      const ceChangeOpenInterest = filteredStrikeRange.map(
         (option) => option.CE?.changeinOpenInterest || 0
       );
-      const pechOpenInterest = filteredStrikeRange.map(
+      const peChangeOpenInterest = filteredStrikeRange.map(
         (option) => option.PE?.changeinOpenInterest || 0
       );
 
@@ -166,25 +219,49 @@ export default function Landing() {
       const totalPEOI = peOpenInterest.reduce((sum, oi) => sum + oi, 0);
       const pcrValue = totalCEOI > 0 ? (totalPEOI / totalCEOI).toFixed(2) : "N/A";
 
+      // Compare with previous series values and store the percentage change.
+      const newSeries = [
+        { name: 'CE Open Interest', data: ceOpenInterest },
+        { name: 'PE Open Interest', data: peOpenInterest },
+        { name: 'CE Change Open Interest', data: ceChangeOpenInterest },
+        { name: 'PE Change Open Interest', data: peChangeOpenInterest },
+      ];
+
+      const newHighlightMap = { ...highlightMap };
+      newSeries.forEach((series, seriesIndex) => {
+        const newData = series.data;
+        const prevData = prevSeriesRef.current[seriesIndex]?.data || [];
+        newData.forEach((value, dataPointIndex) => {
+          const key = `${seriesIndex}-${dataPointIndex}`;
+          const oldVal = prevData[dataPointIndex];
+          if (typeof oldVal === 'number' && oldVal !== 0) {
+            if (value > oldVal) {
+              const pct = (value - oldVal) / oldVal;
+              newHighlightMap[key] = { type: 'increase', updatedAt: Date.now(), pct };
+            } else if (value < oldVal) {
+              const pct = (oldVal - value) / oldVal;
+              newHighlightMap[key] = { type: 'decrease', updatedAt: Date.now(), pct };
+            }
+          }
+        });
+      });
+      setHighlightMap(newHighlightMap);
+      prevSeriesRef.current = newSeries;
+
       // Update the chart data with the new series and categories
-      setChartData({
-        ...chartData,
-        series: [
-          { name: 'CE Open Interest', data: ceOpenInterest },
-          { name: 'PE Open Interest', data: peOpenInterest },
-          { name: 'CE Change Open Interest', data: cechOpenInterest },
-          { name: 'PE Change Open Interest', data: pechOpenInterest },
-        ],
+      setChartData((prev) => ({
+        ...prev,
+        series: newSeries,
         options: {
-          ...chartData.options,
+          ...prev.options,
           xaxis: { categories: filteredStrikeRange.map(option => option.strikePrice) },
         },
-      });
+      }));
 
       // Set the calculated PCR value
       setPcr(pcrValue);
     }
-  }, [filteredData, data, chartData]);
+  }, [filteredData, data]);
 
   // Update chart data when filtered futures data changes
   useEffect(() => {
@@ -226,10 +303,10 @@ export default function Landing() {
       setChartData({
         ...chartData,
         series: [
-          { name: 'CE Open Interest (Futures)', data: ceOpenInterest },
-          { name: 'PE Open Interest (Futures)', data: peOpenInterest },
-          { name: 'CE Change Open Interest (Futures)', data: ceChangeOpenInterest },
-          { name: 'PE Change Open Interest (Futures)', data: peChangeOpenInterest },
+          { name: 'CE Open Interest (Futures)', data: ceOpenInterest, color: '#FF0000' }, // Red for CE
+          { name: 'PE Open Interest (Futures)', data: peOpenInterest, color: '#008000' }, // Green for PE
+          { name: 'CE Change Open Interest (Futures)', data: ceChangeOpenInterest, color: '#FFA500' }, // Pink for change in CE
+          { name: 'PE Change Open Interest (Futures)', data: peChangeOpenInterest, color: '#0000FF' }, // Blue for change in PE
         ],
         options: {
           ...chartData.options,
@@ -248,6 +325,68 @@ export default function Landing() {
   const expiryDates = Array.from(
     new Set((data.records?.data || []).map((option) => option.expiryDate))
   ).sort((a, b) => new Date(a) - new Date(b));
+
+  useEffect(() => {
+    if (selectedIndex || selectedSymbol) {
+      const script = document.createElement('script');
+      script.src = 'https://s3.tradingview.com/tv.js';
+      script.async = true;
+      script.onload = () => {
+        if (window.TradingView) {
+          new window.TradingView.widget({
+            container_id: 'tradingview_chart',
+            autosize: true,
+            symbol: selectedIndex || selectedSymbol,
+            interval: 'D',
+            timezone: 'Etc/UTC',
+            theme: 'light',
+            style: '1',
+            locale: 'en',
+            toolbar_bg: '#f1f3f6',
+            enable_publishing: false,
+            allow_symbol_change: true,
+            hide_side_toolbar: false,
+          });
+        } else {
+          console.error('TradingView widget is not available for the selected symbol.');
+        }
+      };
+      document.body.appendChild(script);
+
+      return () => {
+        const existingScript = document.querySelector('script[src="https://s3.tradingview.com/tv.js"]');
+        if (existingScript) {
+          document.body.removeChild(existingScript);
+        }
+      };
+    }
+  }, [selectedIndex, selectedSymbol]);
+
+  // Dynamic chart options: adjust brightness proportionally based on the stored pct value.
+  const dynamicChartOptions = {
+    ...chartData.options,
+    colors: chartData.series.map((_, seriesIndex) => {
+      return chartData.series[seriesIndex].data.map((_, dataPointIndex) => {
+        const key = `${seriesIndex}-${dataPointIndex}`;
+        const defaultColors = ['#FF0000', '#008000', '#FFA500', '#0000FF'];
+        const baseColor = defaultColors[seriesIndex];
+        const highlight = highlightMap[key];
+        if (highlight) {
+          const elapsed = Date.now() - highlight.updatedAt;
+          if (elapsed < 300000) { // within 5 minutes
+            if (highlight.type === 'increase') {
+              const factor = getDarkenFactor(highlight.pct); // factor from 1 to 0.7
+              return adjustColorBrightness(baseColor, factor);
+            } else if (highlight.type === 'decrease') {
+              const factor = getLightenFactor(highlight.pct); // factor from 1 to 1.3
+              return adjustColorBrightness(baseColor, factor);
+            }
+          }
+        }
+        return baseColor;
+      });
+    }).flat(), // Flatten the array to match ApexCharts' expected format
+  };
 
   return (
     <div>
@@ -515,18 +654,14 @@ export default function Landing() {
           </select>
         </div>
       )}
-      {filteredFuturesData.length > 0 && (
-        <div>
-          <h3>Futures Chart:</h3>
-          <ReactApexChart
-            options={chartData.options}
-            series={chartData.series}
-            type="bar"
-            height={500}
-          />
-        </div>
-      )}
+      
       <div>
+        <h2>Put-Call Ratio (PCR): {pcr}</h2>
+      </div>
+      <ReactApexChart options={dynamicChartOptions} series={chartData.series} type="bar" height={500} />
+    
+      <div>
+        {liveData}
       </div>
     </div>
   );
