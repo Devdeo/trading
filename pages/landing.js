@@ -55,7 +55,40 @@ export default function Landing() {
   const [selectedIndex, setSelectedIndex] = useState('');
   const [pcr, setPcr] = useState('');
   const [liveData, setLiveData] = useState('');
-  const [chartData, setChartData] = useState({
+  const [volumeChartData, setVolumeChartData] = useState({
+  series: [
+    { name: 'CE Volume', data: [], color: '#FF69B4' }, // Pink for CE volume
+    { name: 'PE Volume', data: [], color: '#4B0082' }, // Indigo for PE volume
+  ],
+  options: {
+    chart: { 
+      type: 'bar',
+      height: 300
+    },
+    plotOptions: {
+      bar: {
+        horizontal: true,
+        columnWidth: '70%',
+      },
+    },
+    dataLabels: {
+      enabled: true,
+      offsetY: 0,
+      style: { fontSize: '10px', colors: ['#000000'] },
+      rotateAlways: true,
+      rotation: 270,
+    },
+    stroke: { show: true, width: 1, colors: ['#fff'] },
+    tooltip: { shared: true, intersect: false },
+    xaxis: { categories: [] },
+    title: {
+      text: 'Volume Data',
+      align: 'center',
+    },
+  },
+});
+
+const [chartData, setChartData] = useState({
     series: [
       { name: 'CE Open Interest', data: [], color: '#FF0000' }, // Red for CE
       { name: 'PE Open Interest', data: [], color: '#008000' }, // Green for PE
@@ -63,17 +96,23 @@ export default function Landing() {
       { name: 'PE Change Open Interest', data: [], color: '#0000FF' }, // Blue for change in PE
     ],
     options: {
-      chart: { type: 'bar' },
+      chart: { 
+        type: 'bar',
+        height: 600
+      },
       plotOptions: {
         bar: {
           horizontal: true,
+          columnWidth: '70%',
           dataLabels: { position: 'top' },
         },
       },
       dataLabels: {
         enabled: true,
-        offsetX: -6,
+        offsetY: 0,
         style: { fontSize: '10px', colors: ['#000000'] },
+        rotateAlways: true,
+        rotation: 270,
       },
       stroke: { show: true, width: 1, colors: ['#fff'] },
       tooltip: { shared: true, intersect: false },
@@ -196,9 +235,10 @@ export default function Landing() {
       const currentIndex = strikePrices.indexOf(closestStrikePrice);
 
       // Select a range of strike prices: 3 before and 3 after (including the current strike)
-      const start = Math.max(0, currentIndex - 3);
-      const end = Math.min(filteredData.length, currentIndex + 4);
-      const filteredStrikeRange = filteredData.slice(start, end);
+      const start = Math.max(0, currentIndex -3);
+      const end = Math.min(filteredData.length, currentIndex +4);
+      const filteredStrikeRange = filteredData.slice(start, end)
+        .sort((a, b) => a.strikePrice - b.strikePrice);
 
       // Map out the open interest and change in open interest values
       const ceOpenInterest = filteredStrikeRange.map(
@@ -213,6 +253,12 @@ export default function Landing() {
       const peChangeOpenInterest = filteredStrikeRange.map(
         (option) => option.PE?.changeinOpenInterest || 0
       );
+      const ceVolume = filteredStrikeRange.map(
+        (option) => option.CE?.totalTradedVolume || 0
+      );
+      const peVolume = filteredStrikeRange.map(
+        (option) => option.PE?.totalTradedVolume || 0
+      );
 
       // Calculate total open interests and then PCR
       const totalCEOI = ceOpenInterest.reduce((sum, oi) => sum + oi, 0);
@@ -225,6 +271,8 @@ export default function Landing() {
         { name: 'PE Open Interest', data: peOpenInterest },
         { name: 'CE Change Open Interest', data: ceChangeOpenInterest },
         { name: 'PE Change Open Interest', data: peChangeOpenInterest },
+        { name: 'CE Volume', data: ceVolume },
+        { name: 'PE Volume', data: peVolume },
       ];
 
       const newHighlightMap = { ...highlightMap };
@@ -251,7 +299,20 @@ export default function Landing() {
       // Update the chart data with the new series and categories
       setChartData((prev) => ({
         ...prev,
-        series: newSeries,
+        series: newSeries.slice(0, 4), // Only take OI related series
+        options: {
+          ...prev.options,
+          xaxis: { categories: filteredStrikeRange.map(option => option.strikePrice) },
+        },
+      }));
+
+      // Update volume chart
+      setVolumeChartData((prev) => ({
+        ...prev,
+        series: [
+          { name: 'CE Volume', data: ceVolume, color: '#FF69B4' },
+          { name: 'PE Volume', data: peVolume, color: '#4B0082' },
+        ],
         options: {
           ...prev.options,
           xaxis: { categories: filteredStrikeRange.map(option => option.strikePrice) },
@@ -368,7 +429,7 @@ export default function Landing() {
     colors: chartData.series.map((_, seriesIndex) => {
       return chartData.series[seriesIndex].data.map((_, dataPointIndex) => {
         const key = `${seriesIndex}-${dataPointIndex}`;
-        const defaultColors = ['#FF0000', '#008000', '#FFA500', '#0000FF'];
+        const defaultColors = ['#FF0000', '#008000', '#FFA500', '#0000FF', '#FF69B4', '#4B0082'];
         const baseColor = defaultColors[seriesIndex];
         const highlight = highlightMap[key];
         if (highlight) {
@@ -659,6 +720,7 @@ export default function Landing() {
         <h2>Put-Call Ratio (PCR): {pcr}</h2>
       </div>
       <ReactApexChart options={dynamicChartOptions} series={chartData.series} type="bar" height={500} />
+      <ReactApexChart options={volumeChartData.options} series={volumeChartData.series} type="bar" height={300} />
     
       <div>
         {liveData}
