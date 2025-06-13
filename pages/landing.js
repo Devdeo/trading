@@ -55,15 +55,23 @@ export default function Landing() {
   const [selectedIndex, setSelectedIndex] = useState('');
   const [pcr, setPcr] = useState('');
   const [liveData, setLiveData] = useState('');
+  const [selectedSymbol, setSelectedSymbol] = useState('');
+  const [futuresData, setFuturesData] = useState(null);
+  const [selectedFuturesExpiry, setSelectedFuturesExpiry] = useState('');
+  const [filteredFuturesData, setFilteredFuturesData] = useState([]);
+
+  // Chart controls
+  const [isHorizontal, setIsHorizontal] = useState(true);
+  const [strikeRange, setStrikeRange] = useState(3); // Number of strikes before and after ATM
+
   const [volumeChartData, setVolumeChartData] = useState({
   series: [
-    { name: 'CE Volume', data: [], color: '#FF69B4' }, // Pink for CE volume
-    { name: 'PE Volume', data: [], color: '#4B0082' }, // Indigo for PE volume
+    { name: 'CE Volume', data: [], color: '#FF0000' }, // Red for CE volume
+    { name: 'PE Volume', data: [], color: '#008000' }, // Green for PE volume
   ],
   options: {
     chart: { 
-      type: 'bar',
-      height: 300
+      type: 'bar'
     },
     plotOptions: {
       bar: {
@@ -75,12 +83,18 @@ export default function Landing() {
       enabled: true,
       offsetY: 0,
       style: { fontSize: '10px', colors: ['#000000'] },
-      rotateAlways: true,
-      rotation: 270,
+      rotateAlways: false,
+      rotation: 0,
     },
     stroke: { show: true, width: 1, colors: ['#fff'] },
     tooltip: { shared: true, intersect: false },
-    xaxis: { categories: [] },
+      xaxis: { 
+        categories: [],
+        min: 0
+      },
+      yaxis: {
+        min: 0
+      },
     title: {
       text: 'Volume Data',
       align: 'center',
@@ -97,8 +111,7 @@ const [chartData, setChartData] = useState({
     ],
     options: {
       chart: { 
-        type: 'bar',
-        height: 600
+        type: 'bar'
       },
       plotOptions: {
         bar: {
@@ -111,19 +124,20 @@ const [chartData, setChartData] = useState({
         enabled: true,
         offsetY: 0,
         style: { fontSize: '10px', colors: ['#000000'] },
-        rotateAlways: true,
-        rotation: 270,
+        rotateAlways: false,
+        rotation: 0,
       },
       stroke: { show: true, width: 1, colors: ['#fff'] },
       tooltip: { shared: true, intersect: false },
-      xaxis: { categories: [] },
+      xaxis: { 
+        categories: [],
+        min: 0
+      },
+      yaxis: {
+        min: 0
+      },
     },
   });
-
-  const [selectedSymbol, setSelectedSymbol] = useState('');
-  const [futuresData, setFuturesData] = useState(null);
-  const [selectedFuturesExpiry, setSelectedFuturesExpiry] = useState('');
-  const [filteredFuturesData, setFilteredFuturesData] = useState([]);
 
   // highlightMap: keys formatted as `${seriesIndex}-${dataPointIndex}`
   // Values: { type: 'increase' | 'decrease', updatedAt: timestamp, pct: percentageChange }
@@ -145,6 +159,19 @@ const [chartData, setChartData] = useState({
   // Handler for futures expiry date change
   const handleFuturesExpiryChange = (event) => {
     setSelectedFuturesExpiry(event.target.value);
+  };
+
+  // Chart control handlers
+  const toggleChartOrientation = () => {
+    setIsHorizontal(!isHorizontal);
+  };
+
+  const increaseStrikeRange = () => {
+    setStrikeRange(prev => Math.min(prev + 1, 10)); // Max 10 strikes each side
+  };
+
+  const decreaseStrikeRange = () => {
+    setStrikeRange(prev => Math.max(prev - 1, 1)); // Min 1 strike each side
   };
 
   // Fetch data on initial load and every 5 seconds when an index is selected
@@ -223,8 +250,11 @@ const [chartData, setChartData] = useState({
       // Get the underlying value (if available)
       const underlyingValue = data.records?.underlyingValue || 0;
 
-      // Extract strike prices from the filtered data
-      const strikePrices = filteredData.map((option) => option.strikePrice);
+      // Sort filtered data by strike price in descending order first
+      const sortedFilteredData = [...filteredData].sort((a, b) => b.strikePrice - a.strikePrice);
+
+      // Extract strike prices from the sorted filtered data
+      const strikePrices = sortedFilteredData.map((option) => option.strikePrice);
 
       // Find the closest strike price to the underlying value
       const closestStrikePrice = strikePrices.reduce((prev, curr) =>
@@ -234,11 +264,10 @@ const [chartData, setChartData] = useState({
       );
       const currentIndex = strikePrices.indexOf(closestStrikePrice);
 
-      // Select a range of strike prices: 3 before and 3 after (including the current strike)
-      const start = Math.max(0, currentIndex -3);
-      const end = Math.min(filteredData.length, currentIndex +4);
-      const filteredStrikeRange = filteredData.slice(start, end)
-        .sort((a, b) => a.strikePrice - b.strikePrice);
+      // Select a range of strike prices based on strikeRange setting
+      const start = Math.max(0, currentIndex - strikeRange);
+      const end = Math.min(sortedFilteredData.length, currentIndex + strikeRange + 1);
+      const filteredStrikeRange = sortedFilteredData.slice(start, end);
 
       // Map out the open interest and change in open interest values
       const ceOpenInterest = filteredStrikeRange.map(
@@ -302,6 +331,20 @@ const [chartData, setChartData] = useState({
         series: newSeries.slice(0, 4), // Only take OI related series
         options: {
           ...prev.options,
+          plotOptions: {
+            bar: {
+              horizontal: isHorizontal,
+              columnWidth: '70%',
+              dataLabels: { position: 'top' },
+            },
+          },
+          dataLabels: {
+            enabled: true,
+            offsetY: 0,
+            style: { fontSize: '10px', colors: ['#000000'] },
+            rotateAlways: !isHorizontal,
+            rotation: isHorizontal ? 0 : 270,
+          },
           xaxis: { categories: filteredStrikeRange.map(option => option.strikePrice) },
         },
       }));
@@ -310,11 +353,24 @@ const [chartData, setChartData] = useState({
       setVolumeChartData((prev) => ({
         ...prev,
         series: [
-          { name: 'CE Volume', data: ceVolume, color: '#FF69B4' },
-          { name: 'PE Volume', data: peVolume, color: '#4B0082' },
+          { name: 'CE Volume', data: ceVolume, color: '#FF0000' },
+          { name: 'PE Volume', data: peVolume, color: '#008000' },
         ],
         options: {
           ...prev.options,
+          plotOptions: {
+            bar: {
+              horizontal: isHorizontal,
+              columnWidth: '70%',
+            },
+          },
+          dataLabels: {
+            enabled: true,
+            offsetY: 0,
+            style: { fontSize: '10px', colors: ['#000000'] },
+            rotateAlways: !isHorizontal,
+            rotation: isHorizontal ? 0 : 270,
+          },
           xaxis: { categories: filteredStrikeRange.map(option => option.strikePrice) },
         },
       }));
@@ -322,13 +378,16 @@ const [chartData, setChartData] = useState({
       // Set the calculated PCR value
       setPcr(pcrValue);
     }
-  }, [filteredData, data]);
+  }, [filteredData, data, strikeRange, isHorizontal]);
 
   // Update chart data when filtered futures data changes
   useEffect(() => {
     if (filteredFuturesData.length > 0) {
-      // Extract strike prices from the filtered futures data
-      const strikePrices = filteredFuturesData.map((item) => item.strikePrice);
+      // Sort filtered futures data by strike price in descending order first
+      const sortedFilteredFuturesData = [...filteredFuturesData].sort((a, b) => b.strikePrice - a.strikePrice);
+
+      // Extract strike prices from the sorted filtered futures data
+      const strikePrices = sortedFilteredFuturesData.map((item) => item.strikePrice);
 
       // Get the underlying value (if available)
       const underlyingValue = futuresData.records?.underlyingValue || 0;
@@ -341,10 +400,10 @@ const [chartData, setChartData] = useState({
       );
       const currentIndex = strikePrices.indexOf(closestStrikePrice);
 
-      // Select a range of strike prices: 3 before and 3 after (including the current strike)
-      const start = Math.max(0, currentIndex - 3);
-      const end = Math.min(filteredFuturesData.length, currentIndex + 4);
-      const filteredStrikeRange = filteredFuturesData.slice(start, end);
+      // Select a range of strike prices based on strikeRange setting
+      const start = Math.max(0, currentIndex - strikeRange);
+      const end = Math.min(sortedFilteredFuturesData.length, currentIndex + strikeRange + 1);
+      const filteredStrikeRange = sortedFilteredFuturesData.slice(start, end);
 
       // Map out the open interest and change in open interest values for CE and PE
       const ceOpenInterest = filteredStrikeRange.map(
@@ -361,8 +420,8 @@ const [chartData, setChartData] = useState({
       );
 
       // Update the chart data with the new series and categories
-      setChartData({
-        ...chartData,
+      setChartData(prevChartData => ({
+        ...prevChartData,
         series: [
           { name: 'CE Open Interest (Futures)', data: ceOpenInterest, color: '#FF0000' }, // Red for CE
           { name: 'PE Open Interest (Futures)', data: peOpenInterest, color: '#008000' }, // Green for PE
@@ -370,12 +429,70 @@ const [chartData, setChartData] = useState({
           { name: 'PE Change Open Interest (Futures)', data: peChangeOpenInterest, color: '#0000FF' }, // Blue for change in PE
         ],
         options: {
-          ...chartData.options,
+          ...prevChartData.options,
+          plotOptions: {
+            bar: {
+              horizontal: isHorizontal,
+              columnWidth: '70%',
+              dataLabels: { position: 'top' },
+            },
+          },
+          dataLabels: {
+            enabled: true,
+            offsetY: 0,
+            style: { fontSize: '10px', colors: ['#000000'] },
+            rotateAlways: !isHorizontal,
+            rotation: isHorizontal ? 0 : 270,
+          },
           xaxis: { categories: filteredStrikeRange.map((item) => item.strikePrice) },
         },
-      });
+      }));
     }
-  }, [filteredFuturesData, futuresData, chartData]);
+  }, [filteredFuturesData, futuresData, strikeRange, isHorizontal]);
+
+  // Update chart orientation when isHorizontal changes
+  useEffect(() => {
+    setChartData(prev => ({
+      ...prev,
+      options: {
+        ...prev.options,
+        plotOptions: {
+          bar: {
+            horizontal: isHorizontal,
+            columnWidth: '70%',
+            dataLabels: { position: 'top' },
+          },
+        },
+        dataLabels: {
+          enabled: true,
+          offsetY: 0,
+          style: { fontSize: '10px', colors: ['#000000'] },
+          rotateAlways: !isHorizontal,
+          rotation: isHorizontal ? 0 : 270,
+        },
+      },
+    }));
+
+    setVolumeChartData(prev => ({
+      ...prev,
+      options: {
+        ...prev.options,
+        plotOptions: {
+          bar: {
+            horizontal: isHorizontal,
+            columnWidth: '70%',
+          },
+        },
+        dataLabels: {
+          enabled: true,
+          offsetY: 0,
+          style: { fontSize: '10px', colors: ['#000000'] },
+          rotateAlways: !isHorizontal,
+          rotation: isHorizontal ? 0 : 270,
+        },
+      },
+    }));
+  }, [isHorizontal]);
 
   // Handler for expiry date change
   const handleExpiryChange = (event) => {
@@ -426,10 +543,13 @@ const [chartData, setChartData] = useState({
   // Dynamic chart options: adjust brightness proportionally based on the stored pct value.
   const dynamicChartOptions = {
     ...chartData.options,
+    yaxis: {
+      min: 0
+    },
     colors: chartData.series.map((_, seriesIndex) => {
       return chartData.series[seriesIndex].data.map((_, dataPointIndex) => {
         const key = `${seriesIndex}-${dataPointIndex}`;
-        const defaultColors = ['#FF0000', '#008000', '#FFA500', '#0000FF', '#FF69B4', '#4B0082'];
+        const defaultColors = ['#FF0000', '#008000', '#FFA500', '#0000FF', '#FF0000', '#008000'];
         const baseColor = defaultColors[seriesIndex];
         const highlight = highlightMap[key];
         if (highlight) {
@@ -641,7 +761,7 @@ const [chartData, setChartData] = useState({
           <option value="PETRONET">PETRONET</option>
           <option value="PFC">PFC</option>
           <option value="PHOENIXLTD">PHOENIXLTD</option>
-          <option value="PIDILITIND">PIDILITIND</option>
+<option value="PIDILITIND">PIDILITIND</option>
           <option value="PIIND">PIIND</option>
           <option value="PNB">PNB</option>
           <option value="PNBHOUSING">PNBHOUSING</option>
@@ -715,13 +835,79 @@ const [chartData, setChartData] = useState({
           </select>
         </div>
       )}
-      
+
       <div>
         <h2>Put-Call Ratio (PCR): {pcr}</h2>
       </div>
-      <ReactApexChart options={dynamicChartOptions} series={chartData.series} type="bar" height={500} />
-      <ReactApexChart options={volumeChartData.options} series={volumeChartData.series} type="bar" height={300} />
-    
+
+      <div style={{ marginBottom: '20px', display: 'flex', gap: '10px', alignItems: 'center' }}>
+        <button 
+          onClick={toggleChartOrientation}
+          style={{
+            padding: '8px 16px',
+            backgroundColor: '#007bff',
+            color: 'white',
+            border: 'none',
+            borderRadius: '4px',
+            cursor: 'pointer'
+          }}
+        >
+          {isHorizontal ? 'Switch to Vertical' : 'Switch to Horizontal'}
+        </button>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <span>Strike Range:</span>
+          <button 
+            onClick={decreaseStrikeRange}
+            style={{
+              padding: '4px 8px',
+              backgroundColor: '#dc3545',
+              color: 'white',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontSize: '16px'
+            }}
+          >
+            -
+          </button>
+          <span style={{ minWidth: '20px', textAlign: 'center' }}>{strikeRange}</span>
+          <button 
+            onClick={increaseStrikeRange}
+            style={{
+              padding: '4px 8px',
+              backgroundColor: '#28a745',
+              color: 'white',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontSize: '16px'
+            }}
+          >
+            +
+          </button>
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', gap: '20px', width: '100%' }}>
+        <div style={{ flex: 1 }}>
+          <ReactApexChart 
+            options={dynamicChartOptions} 
+            series={chartData.series} 
+            type="bar" 
+            height={Math.max(500, (strikeRange * 2 + 1) * 50 + 150)} 
+          />
+        </div>
+        <div style={{ flex: 1 }}>
+          <ReactApexChart 
+            options={volumeChartData.options} 
+            series={volumeChartData.series} 
+            type="bar" 
+            height={Math.max(400, (strikeRange * 2 + 1) * 40 + 100)} 
+          />
+        </div>
+      </div>
+
       <div>
         {liveData}
       </div>
