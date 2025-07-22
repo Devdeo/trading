@@ -889,8 +889,8 @@ const [chartData, setChartData] = useState({
         </div>
       </div>
 
-      <div style={{ display: 'flex', gap: '20px', width: '100%' }}>
-        <div style={{ flex: 1 }}>
+      <div>
+        <div>
           <ReactApexChart 
             options={dynamicChartOptions} 
             series={chartData.series} 
@@ -898,7 +898,7 @@ const [chartData, setChartData] = useState({
             height={Math.max(500, (strikeRange * 2 + 1) * 50 + 150)} 
           />
         </div>
-        <div style={{ flex: 1 }}>
+        <div>
           <ReactApexChart 
             options={volumeChartData.options} 
             series={volumeChartData.series} 
