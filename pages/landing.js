@@ -6,6 +6,26 @@ import dynamic from 'next/dynamic';
 const ReactApexChart = dynamic(() => import('react-apexcharts'), { ssr: false });
 
 /**
+ * Calculates the net effect based on changes in open interest for CE and PE options.
+ * @param {Array} filteredStrikeRange - Array of option data for a specific strike range.
+ * @returns {number} The calculated net effect.
+ */
+function calculateNetEffect(filteredStrikeRange) {
+  let netEffect = 0;
+
+  filteredStrikeRange.forEach(option => {
+    const ceChange = option.CE?.changeinOpenInterest || 0;
+    const peChange = option.PE?.changeinOpenInterest || 0;
+    const ceOI = option.CE?.openInterest || 0;
+    const peOI = option.PE?.openInterest || 0;
+
+    netEffect += (ceChange * ceOI) - (peChange * peOI);
+  });
+
+  return netEffect;
+}
+
+/**
  * Adjust the brightness of a hex color.
  * If factor < 1 the color is darkened; if factor > 1 the color is lightened.
  */
@@ -54,7 +74,7 @@ export default function Landing() {
   const [filteredData, setFilteredData] = useState([]);
   const [selectedIndex, setSelectedIndex] = useState('');
   const [pcr, setPcr] = useState('');
-  const [liveData, setLiveData] = useState('');
+  const [liveData, setLiveData] = useState({ netEffect: undefined, sentiment: '' }); // Initialize liveData with netEffect and sentiment
   const [selectedSymbol, setSelectedSymbol] = useState('');
   const [futuresData, setFuturesData] = useState(null);
   const [selectedFuturesExpiry, setSelectedFuturesExpiry] = useState('');
@@ -70,7 +90,7 @@ export default function Landing() {
     { name: 'PE Volume', data: [], color: '#008000' }, // Green for PE volume
   ],
   options: {
-    chart: { 
+    chart: {
       type: 'bar'
     },
     plotOptions: {
@@ -88,7 +108,7 @@ export default function Landing() {
     },
     stroke: { show: true, width: 1, colors: ['#fff'] },
     tooltip: { shared: true, intersect: false },
-      xaxis: { 
+      xaxis: {
         categories: [],
         min: 0
       },
@@ -110,7 +130,7 @@ const [chartData, setChartData] = useState({
       { name: 'PE Change Open Interest', data: [], color: '#0000FF' }, // Blue for change in PE
     ],
     options: {
-      chart: { 
+      chart: {
         type: 'bar'
       },
       plotOptions: {
@@ -129,7 +149,7 @@ const [chartData, setChartData] = useState({
       },
       stroke: { show: true, width: 1, colors: ['#fff'] },
       tooltip: { shared: true, intersect: false },
-      xaxis: { 
+      xaxis: {
         categories: [],
         min: 0
       },
@@ -294,6 +314,12 @@ const [chartData, setChartData] = useState({
       const totalPEOI = peOpenInterest.reduce((sum, oi) => sum + oi, 0);
       const pcrValue = totalCEOI > 0 ? (totalPEOI / totalCEOI).toFixed(2) : "N/A";
 
+      // Calculate Net Effect and Sentiment
+      const netEffect = calculateNetEffect(filteredStrikeRange);
+      let sentiment = "Neutral";
+      if (netEffect > 0) sentiment = "Bullish";
+      else if (netEffect < 0) sentiment = "Bearish";
+
       // Compare with previous series values and store the percentage change.
       const newSeries = [
         { name: 'CE Open Interest', data: ceOpenInterest },
@@ -375,8 +401,9 @@ const [chartData, setChartData] = useState({
         },
       }));
 
-      // Set the calculated PCR value
+      // Store them in state
       setPcr(pcrValue);
+      setLiveData({ ...liveData, netEffect, sentiment });
     }
   }, [filteredData, data, strikeRange, isHorizontal]);
 
@@ -450,6 +477,36 @@ const [chartData, setChartData] = useState({
     }
   }, [filteredFuturesData, futuresData, strikeRange, isHorizontal]);
 
+  // Update chart data when filtered data changes (for PCR and Net Effect)
+  useEffect(() => {
+    if (filteredData.length > 0) {
+      const underlyingValue = data.records?.underlyingValue || 0;
+      const sortedFilteredData = [...filteredData].sort((a, b) => b.strikePrice - a.strikePrice);
+      const strikePrices = sortedFilteredData.map((option) => option.strikePrice);
+      const closestStrikePrice = strikePrices.reduce((prev, curr) =>
+        Math.abs(curr - underlyingValue) < Math.abs(prev - underlyingValue) ? curr : prev
+      );
+      const currentIndex = strikePrices.indexOf(closestStrikePrice);
+      const start = Math.max(0, currentIndex - strikeRange);
+      const end = Math.min(sortedFilteredData.length, currentIndex + strikeRange + 1);
+      const filteredStrikeRange = sortedFilteredData.slice(start, end);
+
+      const ceOpenInterest = filteredStrikeRange.map((option) => option.CE?.openInterest || 0);
+      const peOpenInterest = filteredStrikeRange.map((option) => option.PE?.openInterest || 0);
+      const totalCEOI = ceOpenInterest.reduce((sum, oi) => sum + oi, 0);
+      const totalPEOI = peOpenInterest.reduce((sum, oi) => sum + oi, 0);
+      const pcrValue = totalCEOI > 0 ? (totalPEOI / totalCEOI).toFixed(2) : "N/A";
+
+      const netEffect = calculateNetEffect(filteredStrikeRange);
+      let sentiment = "Neutral";
+      if (netEffect > 0) sentiment = "Bullish";
+      else if (netEffect < 0) sentiment = "Bearish";
+
+      setPcr(pcrValue);
+      setLiveData(prevLiveData => ({ ...prevLiveData, netEffect, sentiment }));
+    }
+  }, [filteredData, data, strikeRange]);
+
   // Update chart orientation when isHorizontal changes
   useEffect(() => {
     setChartData(prev => ({
@@ -506,13 +563,23 @@ const [chartData, setChartData] = useState({
 
   useEffect(() => {
     if (selectedIndex || selectedSymbol) {
+      const containerId = 'tradingview_chart';
+      const existingChart = document.getElementById(containerId)?.querySelector('.tv-chart-container');
+
+      if (existingChart) {
+        // If a chart already exists, remove it before creating a new one
+        while (document.getElementById(containerId)?.firstChild) {
+          document.getElementById(containerId)?.removeChild(document.getElementById(containerId)?.lastChild);
+        }
+      }
+
       const script = document.createElement('script');
       script.src = 'https://s3.tradingview.com/tv.js';
       script.async = true;
       script.onload = () => {
         if (window.TradingView) {
           new window.TradingView.widget({
-            container_id: 'tradingview_chart',
+            container_id: containerId,
             autosize: true,
             symbol: selectedIndex || selectedSymbol,
             interval: 'D',
@@ -529,16 +596,22 @@ const [chartData, setChartData] = useState({
           console.error('TradingView widget is not available for the selected symbol.');
         }
       };
-      document.body.appendChild(script);
+      document.getElementById(containerId)?.appendChild(script);
 
       return () => {
         const existingScript = document.querySelector('script[src="https://s3.tradingview.com/tv.js"]');
-        if (existingScript) {
-          document.body.removeChild(existingScript);
+        if (existingScript && document.getElementById(containerId)?.contains(existingScript)) {
+          document.getElementById(containerId)?.removeChild(existingScript);
+        }
+        // Clean up the chart instance if possible (TradingView API might not expose direct removal)
+        const chartContainer = document.getElementById(containerId);
+        if (chartContainer) {
+          chartContainer.innerHTML = '';
         }
       };
     }
   }, [selectedIndex, selectedSymbol]);
+
 
   // Dynamic chart options: adjust brightness proportionally based on the stored pct value.
   const dynamicChartOptions = {
@@ -836,12 +909,18 @@ const [chartData, setChartData] = useState({
         </div>
       )}
 
-      <div>
-        <h2>Put-Call Ratio (PCR): {pcr}</h2>
+      <div style={{ marginTop: "20px" }}>
+        <h3>PCR: {pcr}</h3>
+        {liveData?.netEffect !== undefined && (
+          <>
+            <h3>Net Effect: {liveData.netEffect.toLocaleString()}</h3>
+            <h3>Sentiment: {liveData.sentiment}</h3>
+          </>
+        )}
       </div>
 
       <div style={{ marginBottom: '20px', display: 'flex', gap: '10px', alignItems: 'center' }}>
-        <button 
+        <button
           onClick={toggleChartOrientation}
           style={{
             padding: '8px 16px',
@@ -857,7 +936,7 @@ const [chartData, setChartData] = useState({
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <span>Strike Range:</span>
-          <button 
+          <button
             onClick={decreaseStrikeRange}
             style={{
               padding: '4px 8px',
@@ -872,7 +951,7 @@ const [chartData, setChartData] = useState({
             -
           </button>
           <span style={{ minWidth: '20px', textAlign: 'center' }}>{strikeRange}</span>
-          <button 
+          <button
             onClick={increaseStrikeRange}
             style={{
               padding: '4px 8px',
@@ -889,21 +968,23 @@ const [chartData, setChartData] = useState({
         </div>
       </div>
 
+      <div id="tradingview_chart"></div>
+
       <div>
         <div>
-          <ReactApexChart 
-            options={dynamicChartOptions} 
-            series={chartData.series} 
-            type="bar" 
-            height={Math.max(500, (strikeRange * 2 + 1) * 50 + 150)} 
+          <ReactApexChart
+            options={dynamicChartOptions}
+            series={chartData.series}
+            type="bar"
+            height={Math.max(500, (strikeRange * 2 + 1) * 50 + 150)}
           />
         </div>
         <div>
-          <ReactApexChart 
-            options={volumeChartData.options} 
-            series={volumeChartData.series} 
-            type="bar" 
-            height={Math.max(400, (strikeRange * 2 + 1) * 40 + 100)} 
+          <ReactApexChart
+            options={volumeChartData.options}
+            series={volumeChartData.series}
+            type="bar"
+            height={Math.max(400, (strikeRange * 2 + 1) * 40 + 100)}
           />
         </div>
       </div>
