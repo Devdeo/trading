@@ -989,9 +989,6 @@ const [chartData, setChartData] = useState({
         </div>
       </div>
 
-      <div>
-        {liveData}
       </div>
-    </div>
   );
 }
