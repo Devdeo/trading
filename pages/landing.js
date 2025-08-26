@@ -314,11 +314,22 @@ const [chartData, setChartData] = useState({
       const totalPEOI = peOpenInterest.reduce((sum, oi) => sum + oi, 0);
       const pcrValue = totalCEOI > 0 ? (totalPEOI / totalCEOI).toFixed(2) : "N/A";
 
-      // Calculate Net Effect and Sentiment
-      const netEffect = calculateNetEffect(filteredStrikeRange);
+      // Calculate Net Effect and Sentiment for current strike price only
+      const currentStrikeData = filteredStrikeRange.find(option => option.strikePrice === closestStrikePrice);
+      let netEffect = 0;
       let sentiment = "Neutral";
-      if (netEffect > 0) sentiment = "Bullish";
-      else if (netEffect < 0) sentiment = "Bearish";
+      
+      if (currentStrikeData) {
+        const ceChange = currentStrikeData.CE?.changeinOpenInterest || 0;
+        const peChange = currentStrikeData.PE?.changeinOpenInterest || 0;
+        const ceOI = currentStrikeData.CE?.openInterest || 0;
+        const peOI = currentStrikeData.PE?.openInterest || 0;
+        
+        netEffect = (ceChange * ceOI) - (peChange * peOI);
+        
+        if (netEffect > 0) sentiment = "Bullish";
+        else if (netEffect < 0) sentiment = "Bearish";
+      }
 
       // Compare with previous series values and store the percentage change.
       const newSeries = [
@@ -403,7 +414,7 @@ const [chartData, setChartData] = useState({
 
       // Store them in state
       setPcr(pcrValue);
-      setLiveData({ ...liveData, netEffect, sentiment });
+      setLiveData({ netEffect, sentiment });
     }
   }, [filteredData, data, strikeRange, isHorizontal]);
 
@@ -497,13 +508,25 @@ const [chartData, setChartData] = useState({
       const totalPEOI = peOpenInterest.reduce((sum, oi) => sum + oi, 0);
       const pcrValue = totalCEOI > 0 ? (totalPEOI / totalCEOI).toFixed(2) : "N/A";
 
-      const netEffect = calculateNetEffect(filteredStrikeRange);
+      // Calculate Net Effect and Sentiment for current strike price only
+      const currentStrikeData = filteredStrikeRange.find(option => option.strikePrice === closestStrikePrice);
+      let netEffect = 0;
       let sentiment = "Neutral";
-      if (netEffect > 0) sentiment = "Bullish";
-      else if (netEffect < 0) sentiment = "Bearish";
+      
+      if (currentStrikeData) {
+        const ceChange = currentStrikeData.CE?.changeinOpenInterest || 0;
+        const peChange = currentStrikeData.PE?.changeinOpenInterest || 0;
+        const ceOI = currentStrikeData.CE?.openInterest || 0;
+        const peOI = currentStrikeData.PE?.openInterest || 0;
+        
+        netEffect = (ceChange * ceOI) - (peChange * peOI);
+        
+        if (netEffect > 0) sentiment = "Bullish";
+        else if (netEffect < 0) sentiment = "Bearish";
+      }
 
       setPcr(pcrValue);
-      setLiveData(prevLiveData => ({ ...prevLiveData, netEffect, sentiment }));
+      setLiveData({ netEffect, sentiment });
     }
   }, [filteredData, data, strikeRange]);
 
@@ -916,6 +939,44 @@ const [chartData, setChartData] = useState({
           >
             +
           </button>
+        </div>
+      </div>
+
+      {/* Net Effect and Sentiment Display */}
+      <div style={{ 
+        display: 'flex', 
+        justifyContent: 'center', 
+        gap: '20px', 
+        margin: '20px 0',
+        padding: '15px',
+        backgroundColor: '#f5f5f5',
+        borderRadius: '8px'
+      }}>
+        <div style={{ textAlign: 'center' }}>
+          <strong>Current Strike Net Effect:</strong>
+          <div style={{ 
+            fontSize: '18px', 
+            color: liveData.netEffect > 0 ? '#28a745' : liveData.netEffect < 0 ? '#dc3545' : '#6c757d',
+            fontWeight: 'bold'
+          }}>
+            {liveData.netEffect?.toFixed(2) || 'N/A'}
+          </div>
+        </div>
+        <div style={{ textAlign: 'center' }}>
+          <strong>Current Strike Sentiment:</strong>
+          <div style={{ 
+            fontSize: '18px', 
+            color: liveData.sentiment === 'Bullish' ? '#28a745' : liveData.sentiment === 'Bearish' ? '#dc3545' : '#6c757d',
+            fontWeight: 'bold'
+          }}>
+            {liveData.sentiment || 'Neutral'}
+          </div>
+        </div>
+        <div style={{ textAlign: 'center' }}>
+          <strong>PCR:</strong>
+          <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#007bff' }}>
+            {pcr || 'N/A'}
+          </div>
         </div>
       </div>
 
