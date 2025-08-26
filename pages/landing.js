@@ -561,56 +561,7 @@ const [chartData, setChartData] = useState({
     new Set((data.records?.data || []).map((option) => option.expiryDate))
   ).sort((a, b) => new Date(a) - new Date(b));
 
-  useEffect(() => {
-    if (selectedIndex || selectedSymbol) {
-      const containerId = 'tradingview_chart';
-      const existingChart = document.getElementById(containerId)?.querySelector('.tv-chart-container');
-
-      if (existingChart) {
-        // If a chart already exists, remove it before creating a new one
-        while (document.getElementById(containerId)?.firstChild) {
-          document.getElementById(containerId)?.removeChild(document.getElementById(containerId)?.lastChild);
-        }
-      }
-
-      const script = document.createElement('script');
-      script.src = 'https://s3.tradingview.com/tv.js';
-      script.async = true;
-      script.onload = () => {
-        if (window.TradingView) {
-          new window.TradingView.widget({
-            container_id: containerId,
-            autosize: true,
-            symbol: selectedIndex || selectedSymbol,
-            interval: 'D',
-            timezone: 'Etc/UTC',
-            theme: 'light',
-            style: '1',
-            locale: 'en',
-            toolbar_bg: '#f1f3f6',
-            enable_publishing: false,
-            allow_symbol_change: true,
-            hide_side_toolbar: false,
-          });
-        } else {
-          console.error('TradingView widget is not available for the selected symbol.');
-        }
-      };
-      document.getElementById(containerId)?.appendChild(script);
-
-      return () => {
-        const existingScript = document.querySelector('script[src="https://s3.tradingview.com/tv.js"]');
-        if (existingScript && document.getElementById(containerId)?.contains(existingScript)) {
-          document.getElementById(containerId)?.removeChild(existingScript);
-        }
-        // Clean up the chart instance if possible (TradingView API might not expose direct removal)
-        const chartContainer = document.getElementById(containerId);
-        if (chartContainer) {
-          chartContainer.innerHTML = '';
-        }
-      };
-    }
-  }, [selectedIndex, selectedSymbol]);
+  
 
 
   // Dynamic chart options: adjust brightness proportionally based on the stored pct value.
@@ -967,8 +918,6 @@ const [chartData, setChartData] = useState({
           </button>
         </div>
       </div>
-
-      <div id="tradingview_chart"></div>
 
       <div>
         <div>
