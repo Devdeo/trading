@@ -19,7 +19,7 @@ function calculateNetEffect(filteredStrikeRange) {
     const ceOI = option.CE?.openInterest || 0;
     const peOI = option.PE?.openInterest || 0;
 
-    netEffect += (ceChange * ceOI) - (peChange * peOI);
+    netEffect += (peChange * peOI) - (ceChange * ceOI) ;
   });
 
   return netEffect;
