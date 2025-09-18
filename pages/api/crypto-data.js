@@ -15,7 +15,6 @@ let requestCount = 0;
 let windowStart = Date.now();
 
 export default async function handler(req, res) {
-  // Rate limiting check
   const now = Date.now();
   if (now - windowStart > RATE_LIMIT_WINDOW) {
     requestCount = 0;
@@ -34,112 +33,83 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Symbol and timeframe are required' });
     }
 
-    // Check cache (valid for 2 minutes for crypto data)
-    if (cache.data && cache.timestamp && 
-        cache.symbol === symbol && 
-        cache.timeframe === timeframe &&
-        now - cache.timestamp < 120000) {
+    // Check cache (valid for 2 minutes)
+    if (
+      cache.data &&
+      cache.timestamp &&
+      cache.symbol === symbol &&
+      cache.timeframe === timeframe &&
+      now - cache.timestamp < 120000
+    ) {
       return res.status(200).json(cache.data);
     }
 
-    // Map timeframes to appropriate intervals and ranges
-    const getTimeframeParams = (tf) => {
+    // Map timeframe to Yahoo interval/range
+    const getYahooTimeframeParams = (tf) => {
       const timeframeMap = {
-        '1h': { interval: '1h', days: '7' },
-        '2h': { interval: '2h', days: '14' }, 
-        '5h': { interval: '5h', days: '30' },
-        '10h': { interval: '10h', days: '60' },
-        '1d': { interval: '1d', days: '365' }
+        '1h': { interval: '1h', range: '7d' },
+        '2h': { interval: '2h', range: '14d' },
+        '5h': { interval: '5h', range: '30d' },
+        '10h': { interval: '10h', range: '60d' },
+        '1d': { interval: '1d', range: '1y' }
       };
       return timeframeMap[tf] || timeframeMap['1h'];
     };
 
-    const { interval, days } = getTimeframeParams(timeframe);
+    const { interval, range } = getYahooTimeframeParams(timeframe);
 
-    // Convert symbol format (BTCUSDT -> bitcoin, ETHUSDT -> ethereum)
-    const getCoinId = (symbol) => {
+    // Convert symbol format (BTCUSDT -> BTC-USD, ETHUSDT -> ETH-USD)
+    const getYahooSymbol = (symbol) => {
       const symbolMap = {
-        'BTCUSDT': 'bitcoin',
-        'ETHUSDT': 'ethereum'
+        'BTCUSDT': 'BTC-USD',
+        'ETHUSDT': 'ETH-USD'
       };
-      return symbolMap[symbol] || 'bitcoin';
+      return symbolMap[symbol] || 'BTC-USD';
     };
 
-    const coinId = getCoinId(symbol);
+    const yahooSymbol = getYahooSymbol(symbol);
 
-    // Use CoinGecko API for crypto data (free tier)
+    // Fetch data from Yahoo Finance API
     const response = await axios.get(
-      `https://api.coingecko.com/api/v3/coins/${coinId}/ohlc`,
+      `https://query1.finance.yahoo.com/v8/finance/chart/${yahooSymbol}`,
       {
         params: {
-          vs_currency: 'usd',
-          days: days
+          interval: interval,
+          range: range
         },
         timeout: 10000,
         headers: {
           'Accept': 'application/json',
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+          'User-Agent': 'Mozilla/5.0'
         }
       }
     );
 
-    const ohlcData = response.data;
-
-    if (!ohlcData || !Array.isArray(ohlcData)) {
-      throw new Error('Invalid data format from CoinGecko API');
+    const chart = response.data?.chart?.result?.[0];
+    if (!chart || !chart.timestamp || !chart.indicators?.quote?.[0]) {
+      throw new Error('Invalid data format from Yahoo Finance API');
     }
 
-    // Transform data to match our candlestick format
-    // CoinGecko returns: [timestamp, open, high, low, close]
-    // We need: { x: timestamp, y: [open, high, low, close] }
-    const transformedData = ohlcData.map(candle => ({
-      x: candle[0], // timestamp
+    const timestamps = chart.timestamp;
+    const quote = chart.indicators.quote[0];
+
+    // Transform Yahoo Finance data to candlestick format
+    const transformedData = timestamps.map((ts, idx) => ({
+      x: ts * 1000, // Yahoo timestamps are in seconds, convert to ms
       y: [
-        parseFloat(candle[1]), // open
-        parseFloat(candle[2]), // high
-        parseFloat(candle[3]), // low
-        parseFloat(candle[4])  // close
+        parseFloat(quote.open[idx]),
+        parseFloat(quote.high[idx]),
+        parseFloat(quote.low[idx]),
+        parseFloat(quote.close[idx])
       ]
     }));
 
-    // Filter data based on timeframe to reduce noise
-    const filterDataByTimeframe = (data, timeframe) => {
-      if (!data || data.length === 0) return data;
-      
-      const now = Date.now();
-      let cutoffTime;
-      
-      switch(timeframe) {
-        case '1h':
-          cutoffTime = now - (7 * 24 * 60 * 60 * 1000); // 7 days
-          break;
-        case '2h':
-          cutoffTime = now - (14 * 24 * 60 * 60 * 1000); // 14 days
-          break;
-        case '5h':
-          cutoffTime = now - (30 * 24 * 60 * 60 * 1000); // 30 days
-          break;
-        case '10h':
-          cutoffTime = now - (60 * 24 * 60 * 60 * 1000); // 60 days
-          break;
-        case '1d':
-          cutoffTime = now - (365 * 24 * 60 * 60 * 1000); // 365 days
-          break;
-        default:
-          cutoffTime = now - (7 * 24 * 60 * 60 * 1000); // Default 7 days
-      }
-      
-      return data.filter(candle => candle.x >= cutoffTime);
-    };
-
-    const filteredData = filterDataByTimeframe(transformedData, timeframe);
-
     const result = {
-      data: filteredData,
+      data: transformedData,
       symbol,
       timeframe,
       timestamp: now,
-      source: 'CoinGecko'
+      source: 'Yahoo Finance'
     };
 
     // Update cache
@@ -148,33 +118,36 @@ export default async function handler(req, res) {
     cache.symbol = symbol;
     cache.timeframe = timeframe;
 
-    console.log(`Crypto data fetched for ${symbol} (${timeframe}): ${filteredData.length} data points`);
+    console.log(`Crypto data fetched from Yahoo for ${symbol} (${timeframe}): ${transformedData.length} data points`);
 
     res.status(200).json(result);
   } catch (error) {
     console.error('Crypto data API error:', error.message);
-    
+
     // Return cached data if available during errors
-    if (cache.data && cache.timestamp && 
-        cache.symbol === req.query.symbol && 
-        cache.timeframe === req.query.timeframe &&
-        now - cache.timestamp < 600000) { // 10 minute fallback
+    if (
+      cache.data &&
+      cache.timestamp &&
+      cache.symbol === req.query.symbol &&
+      cache.timeframe === req.query.timeframe &&
+      now - cache.timestamp < 600000
+    ) {
       console.log('Returning cached crypto data due to API error');
       return res.status(200).json(cache.data);
     }
-    
-    // More specific error handling
+
+    // Error handling
     if (error.response?.status === 429) {
-      res.status(503).json({ 
-        error: 'CoinGecko API rate limit exceeded. Please try again in a few minutes.' 
+      res.status(503).json({
+        error: 'Yahoo Finance API rate limit exceeded. Please try again later.'
       });
     } else if (error.code === 'ECONNRESET' || error.code === 'ETIMEDOUT') {
-      res.status(504).json({ 
-        error: 'CoinGecko API connection timeout. The server may be experiencing high load.' 
+      res.status(504).json({
+        error: 'Yahoo Finance API connection timeout. The server may be experiencing high load.'
       });
     } else {
-      res.status(500).json({ 
-        error: 'Failed to fetch crypto data from CoinGecko API',
+      res.status(500).json({
+        error: 'Failed to fetch crypto data from Yahoo Finance API',
         details: process.env.NODE_ENV === 'development' ? error.message : undefined
       });
     }
