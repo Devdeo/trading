@@ -538,10 +538,10 @@ const [chartData, setChartData] = useState({
       if (!selectedSymbol || !isMounted) return;
       try {
         const response = await axios.get(`/api/futures-data?symbol=${selectedSymbol}`);
-        const response1 = await axios.get(`/api/live_data?symbol=${selectedSymbol}`);
+        
         if (isMounted) {
           setFuturesData(response.data);
-          setLiveData(response1.data);
+          
         }
       } catch (error) {
         // Silently retry on next interval
