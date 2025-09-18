@@ -1,0 +1,79 @@
+Yes ✅ — when you open a Yahoo Finance chart like the link you shared, you *can* switch to **1m, 5m, 15m, 1h** candles.
+
+But here’s the catch:
+
+* **Yahoo Finance web UI** shows intraday OHLC (1m, 5m, etc.) because it uses a **hidden WebSocket / chart API**.
+* The **official Yahoo Finance API / Python yfinance library** only gives **EOD daily / weekly / monthly** OHLC — not intraday.
+* To get **1m/5m OHLC programmatically**, you need to hit their **hidden endpoints** (undocumented, not guaranteed stable).
+
+---
+
+### 🔎 Example of Yahoo hidden chart API
+
+For NSEI (Nifty 50 index):
+
+```
+https://query1.finance.yahoo.com/v8/finance/chart/^NSEI?interval=5m&range=1d
+```
+
+This returns JSON like:
+
+```json
+{
+  "chart": {
+    "result": [
+      {
+        "timestamp": [1724827800, 1724828100, ...],
+        "indicators": {
+          "quote": [
+            {
+              "open": [19755.2, 19758.6, ...],
+              "high": [19760.3, 19762.5, ...],
+              "low": [19750.0, 19755.1, ...],
+              "close": [19758.0, 19761.2, ...],
+              "volume": [0, 0, ...]
+            }
+          ]
+        }
+      }
+    ]
+  }
+}
+```
+
+---
+
+### 🔧 Parameters you can use
+
+* `interval=1m, 5m, 15m, 1h, 1d`
+* `range=1d, 5d, 1mo, 3mo, 6mo, 1y, max`
+
+Examples:
+
+* **1-minute candles for 1 day (NSEI)**
+
+  ```
+  https://query1.finance.yahoo.com/v8/finance/chart/^NSEI?interval=1m&range=1d
+  ```
+* **5-minute candles for 5 days (Reliance)**
+
+  ```
+  https://query1.finance.yahoo.com/v8/finance/chart/RELIANCE.NS?interval=5m&range=5d
+  ```
+* **15-minute candles for 1 month**
+
+  ```
+  https://query1.finance.yahoo.com/v8/finance/chart/TCS.NS?interval=15m&range=1mo
+  ```
+
+---
+
+⚠️ **Important**:
+
+* This is **unofficial / undocumented** (Yahoo may block heavy use).
+* For a serious **Micro-SaaS**, this is **not legally safe**.
+* For **personal / prototyping**, it works fine.
+
+---
+
+👉 Do you want me to make you a **ready-to-use JS/TS fetch function** that calls this hidden Yahoo API and gives you OHLC data in clean JSON?
