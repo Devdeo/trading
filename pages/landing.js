@@ -753,41 +753,25 @@ const [chartData, setChartData] = useState({
     };
   }, [selectedIndex, selectedSymbol, selectedTimeframe]);
 
-  // Trigger AI analysis when data is available and updated
-  useEffect(() => {
-    let isMounted = true;
-    const triggerAIAnalysis = async () => {
-      if (!isMounted) return;
-      
-      // Determine which symbol to analyze and whether it's an index
-      let symbolToAnalyze = null;
-      let isIndex = false;
-      
-      if (selectedIndex && data.records?.data?.length > 0 && filteredData.length > 0) {
-        symbolToAnalyze = selectedIndex;
-        isIndex = true;
-      } else if (selectedSymbol && futuresData?.records?.data?.length > 0 && filteredFuturesData.length > 0) {
-        symbolToAnalyze = selectedSymbol;
-        isIndex = false;
-      }
-      
-      // Only proceed if we have both candlestick data and OI data
-      if (symbolToAnalyze && candlestickData.series[0]?.data.length > 0) {
-        // Add a small delay to ensure all data is processed
-        setTimeout(() => {
-          if (isMounted) {
-            fetchAIAnalysis(symbolToAnalyze, isIndex);
-          }
-        }, 2000); // 2-second delay
-      }
-    };
-
-    triggerAIAnalysis();
+  // Manual AI analysis trigger
+  const handleManualAIAnalysis = () => {
+    // Determine which symbol to analyze and whether it's an index
+    let symbolToAnalyze = null;
+    let isIndex = false;
     
-    return () => {
-      isMounted = false;
-    };
-  }, [filteredData, filteredFuturesData, candlestickData, selectedTimeframe, liveData.netEffect]);
+    if (selectedIndex && data.records?.data?.length > 0 && filteredData.length > 0) {
+      symbolToAnalyze = selectedIndex;
+      isIndex = true;
+    } else if (selectedSymbol && futuresData?.records?.data?.length > 0 && filteredFuturesData.length > 0) {
+      symbolToAnalyze = selectedSymbol;
+      isIndex = false;
+    }
+    
+    // Only proceed if we have both candlestick data and OI data
+    if (symbolToAnalyze && candlestickData.series[0]?.data.length > 0) {
+      fetchAIAnalysis(symbolToAnalyze, isIndex);
+    }
+  };
 
   // Update chart orientation when isHorizontal changes
   useEffect(() => {
@@ -1251,6 +1235,27 @@ const [chartData, setChartData] = useState({
         }}>
           🤖 AI Market Analysis
         </h3>
+        
+        {/* Manual AI Analysis Button */}
+        <div style={{ textAlign: 'center', marginBottom: '20px' }}>
+          <button
+            onClick={handleManualAIAnalysis}
+            disabled={aiAnalysis.loading}
+            style={{
+              backgroundColor: aiAnalysis.loading ? '#6c757d' : '#007bff',
+              color: 'white',
+              border: 'none',
+              padding: '12px 24px',
+              borderRadius: '8px',
+              fontSize: '16px',
+              fontWeight: 'bold',
+              cursor: aiAnalysis.loading ? 'not-allowed' : 'pointer',
+              transition: 'background-color 0.3s ease'
+            }}
+          >
+            {aiAnalysis.loading ? '🧠 Analyzing...' : '🔍 Analyze with AI'}
+          </button>
+        </div>
         
         {aiAnalysis.loading && (
           <div style={{ textAlign: 'center', padding: '20px' }}>
