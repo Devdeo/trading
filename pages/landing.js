@@ -1851,79 +1851,6 @@ const [chartData, setChartData] = useState({
       {/* Crypto Tab */}
       {activeTab === 'crypto' && (
         <div>
-          {/* Crypto Controls */}
-          <div style={{ marginBottom: '20px', display: 'flex', gap: '20px', alignItems: 'center', flexWrap: 'wrap' }}>
-            <div>
-              <label htmlFor="crypto-select" style={{ marginRight: '10px', fontWeight: 'bold' }}>
-                Select Crypto:
-              </label>
-              <select 
-                id="crypto-select" 
-                value={selectedCrypto} 
-                onChange={handleCryptoChange}
-                style={{
-                  padding: '8px 12px',
-                  borderRadius: '4px',
-                  border: '1px solid #ccc',
-                  fontSize: '14px',
-                  backgroundColor: 'white',
-                  minWidth: '150px'
-                }}
-              >
-                <option value="BTCUSDT">BTC/USD</option>
-                <option value="ETHUSDT">ETH/USD</option>
-              </select>
-            </div>
-
-            <div>
-              <label htmlFor="crypto-timeframe-select" style={{ marginRight: '10px', fontWeight: 'bold' }}>
-                Timeframe:
-              </label>
-              <select 
-                id="crypto-timeframe-select" 
-                value={cryptoTimeframe} 
-                onChange={handleCryptoTimeframeChange}
-                style={{
-                  padding: '8px 12px',
-                  borderRadius: '4px',
-                  border: '1px solid #ccc',
-                  fontSize: '14px',
-                  backgroundColor: 'white',
-                  minWidth: '120px'
-                }}
-              >
-                <option value="1h">1 Hour</option>
-                <option value="2h">2 Hours</option>
-                <option value="5h">5 Hours</option>
-                <option value="10h">10 Hours</option>
-                <option value="1d">1 Day</option>
-              </select>
-            </div>
-          </div>
-
-          {/* Crypto Current Price Display */}
-          {cryptoCurrentPrice > 0 && (
-            <div style={{ 
-              display: 'flex', 
-              justifyContent: 'center', 
-              marginBottom: '20px',
-              padding: '15px',
-              backgroundColor: '#f5f5f5',
-              borderRadius: '8px'
-            }}>
-              <div style={{ textAlign: 'center' }}>
-                <strong>Current Price:</strong>
-                <div style={{ 
-                  fontSize: '24px', 
-                  color: '#007bff',
-                  fontWeight: 'bold'
-                }}>
-                  ${cryptoCurrentPrice.toFixed(2)}
-                </div>
-              </div>
-            </div>
-          )}
-
           {/* Crypto AI Analysis Section */}
           <div style={{
             margin: '20px 0',
@@ -2117,6 +2044,79 @@ const [chartData, setChartData] = useState({
               </div>
             )}
           </div>
+
+          {/* Crypto Controls */}
+          <div style={{ marginBottom: '20px', display: 'flex', gap: '20px', alignItems: 'center', flexWrap: 'wrap' }}>
+            <div>
+              <label htmlFor="crypto-select" style={{ marginRight: '10px', fontWeight: 'bold' }}>
+                Select Crypto:
+              </label>
+              <select 
+                id="crypto-select" 
+                value={selectedCrypto} 
+                onChange={handleCryptoChange}
+                style={{
+                  padding: '8px 12px',
+                  borderRadius: '4px',
+                  border: '1px solid #ccc',
+                  fontSize: '14px',
+                  backgroundColor: 'white',
+                  minWidth: '150px'
+                }}
+              >
+                <option value="BTCUSDT">BTC/USD</option>
+                <option value="ETHUSDT">ETH/USD</option>
+              </select>
+            </div>
+
+            <div>
+              <label htmlFor="crypto-timeframe-select" style={{ marginRight: '10px', fontWeight: 'bold' }}>
+                Timeframe:
+              </label>
+              <select 
+                id="crypto-timeframe-select" 
+                value={cryptoTimeframe} 
+                onChange={handleCryptoTimeframeChange}
+                style={{
+                  padding: '8px 12px',
+                  borderRadius: '4px',
+                  border: '1px solid #ccc',
+                  fontSize: '14px',
+                  backgroundColor: 'white',
+                  minWidth: '120px'
+                }}
+              >
+                <option value="1h">1 Hour</option>
+                <option value="2h">2 Hours</option>
+                <option value="5h">5 Hours</option>
+                <option value="10h">10 Hours</option>
+                <option value="1d">1 Day</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Crypto Current Price Display */}
+          {cryptoCurrentPrice > 0 && (
+            <div style={{ 
+              display: 'flex', 
+              justifyContent: 'center', 
+              marginBottom: '20px',
+              padding: '15px',
+              backgroundColor: '#f5f5f5',
+              borderRadius: '8px'
+            }}>
+              <div style={{ textAlign: 'center' }}>
+                <strong>Current Price:</strong>
+                <div style={{ 
+                  fontSize: '24px', 
+                  color: '#007bff',
+                  fontWeight: 'bold'
+                }}>
+                  ${cryptoCurrentPrice.toFixed(2)}
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Crypto Chart */}
           <div style={{ marginBottom: '30px', border: '1px solid #e0e0e0', borderRadius: '8px', padding: '10px' }}>
