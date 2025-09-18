@@ -29,44 +29,8 @@ function calculateNetEffect(filteredStrikeRange) {
  * Adjust the brightness of a hex color.
  * If factor < 1 the color is darkened; if factor > 1 the color is lightened.
  */
-function adjustColorBrightness(hex, factor) {
-  let color = hex.startsWith('#') ? hex.slice(1) : hex;
-  if (color.length === 3) {
-    color = color.split('').map(ch => ch + ch).join('');
-  }
-  let r = parseInt(color.substring(0, 2), 16);
-  let g = parseInt(color.substring(2, 4), 16);
-  let b = parseInt(color.substring(4, 6), 16);
 
-  r = Math.min(255, Math.max(0, Math.floor(r * factor)));
-  g = Math.min(255, Math.max(0, Math.floor(g * factor)));
-  b = Math.min(255, Math.max(0, Math.floor(b * factor)));
 
-  return `#${((1 << 24) + (r << 16) + (g << 8) + b)
-    .toString(16)
-    .slice(1)
-    .toUpperCase()}`;
-}
-
-/**
- * For increases: map a percentage change (0 to maxPct) to a darkening factor.
- * At 0% change, factor = 1; at maxPct change, factor = 0.7.
- */
-function getDarkenFactor(pct) {
-  const maxPct = 0.5;
-  const ratio = Math.min(pct, maxPct) / maxPct; // value between 0 and 1
-  return 1 - 0.3 * ratio; // from 1 to 0.7
-}
-
-/**
- * For decreases: map a percentage change (0 to maxPct) to a lightening factor.
- * At 0% change, factor = 1; at maxPct change, factor = 1.3.
- */
-function getLightenFactor(pct) {
-  const maxPct = 0.5;
-  const ratio = Math.min(pct, maxPct) / maxPct;
-  return 1 + 0.3 * ratio; // from 1 to 1.3
-}
 
 export default function Landing() {
   const [data, setData] = useState([]);
@@ -126,7 +90,7 @@ const [chartData, setChartData] = useState({
     series: [
       { name: 'CE Open Interest', data: [], color: '#FF0000' }, // Red for CE
       { name: 'PE Open Interest', data: [], color: '#008000' }, // Green for PE
-      { name: 'CE Change Open Interest', data: [], color: '#FFA500' }, // Orange for change in CE
+      { name: 'CE Change Open Interest', data: [], color: '#FFFF00' }, // Yellow for change in CE
       { name: 'PE Change Open Interest', data: [], color: '#0000FF' }, // Blue for change in PE
     ],
     options: {
@@ -159,12 +123,7 @@ const [chartData, setChartData] = useState({
     },
   });
 
-  // highlightMap: keys formatted as `${seriesIndex}-${dataPointIndex}`
-  // Values: { type: 'increase' | 'decrease', updatedAt: timestamp, pct: percentageChange }
-  const [highlightMap, setHighlightMap] = useState({});
 
-  // Reference to previous series values.
-  const prevSeriesRef = useRef([]);
 
   // Handler for selecting an index
   const handleIndex = (event) => {
@@ -341,26 +300,6 @@ const [chartData, setChartData] = useState({
         { name: 'PE Volume', data: peVolume },
       ];
 
-      const newHighlightMap = { ...highlightMap };
-      newSeries.forEach((series, seriesIndex) => {
-        const newData = series.data;
-        const prevData = prevSeriesRef.current[seriesIndex]?.data || [];
-        newData.forEach((value, dataPointIndex) => {
-          const key = `${seriesIndex}-${dataPointIndex}`;
-          const oldVal = prevData[dataPointIndex];
-          if (typeof oldVal === 'number' && oldVal !== 0) {
-            if (value > oldVal) {
-              const pct = (value - oldVal) / oldVal;
-              newHighlightMap[key] = { type: 'increase', updatedAt: Date.now(), pct };
-            } else if (value < oldVal) {
-              const pct = (oldVal - value) / oldVal;
-              newHighlightMap[key] = { type: 'decrease', updatedAt: Date.now(), pct };
-            }
-          }
-        });
-      });
-      setHighlightMap(newHighlightMap);
-      prevSeriesRef.current = newSeries;
 
       // Update the chart data with the new series and categories
       setChartData((prev) => ({
@@ -463,7 +402,7 @@ const [chartData, setChartData] = useState({
         series: [
           { name: 'CE Open Interest (Futures)', data: ceOpenInterest, color: '#FF0000' }, // Red for CE
           { name: 'PE Open Interest (Futures)', data: peOpenInterest, color: '#008000' }, // Green for PE
-          { name: 'CE Change Open Interest (Futures)', data: ceChangeOpenInterest, color: '#FFA500' }, // Pink for change in CE
+          { name: 'CE Change Open Interest (Futures)', data: ceChangeOpenInterest, color: '#FFFF00' }, // Yellow for change in CE
           { name: 'PE Change Open Interest (Futures)', data: peChangeOpenInterest, color: '#0000FF' }, // Blue for change in PE
         ],
         options: {
@@ -587,34 +526,6 @@ const [chartData, setChartData] = useState({
   
 
 
-  // Dynamic chart options: adjust brightness proportionally based on the stored pct value.
-  const dynamicChartOptions = {
-    ...chartData.options,
-    yaxis: {
-      min: 0
-    },
-    colors: chartData.series.map((_, seriesIndex) => {
-      return chartData.series[seriesIndex].data.map((_, dataPointIndex) => {
-        const key = `${seriesIndex}-${dataPointIndex}`;
-        const defaultColors = ['#FF0000', '#008000', '#FFA500', '#0000FF', '#FF0000', '#008000'];
-        const baseColor = defaultColors[seriesIndex];
-        const highlight = highlightMap[key];
-        if (highlight) {
-          const elapsed = Date.now() - highlight.updatedAt;
-          if (elapsed < 300000) { // within 5 minutes
-            if (highlight.type === 'increase') {
-              const factor = getDarkenFactor(highlight.pct); // factor from 1 to 0.7
-              return adjustColorBrightness(baseColor, factor);
-            } else if (highlight.type === 'decrease') {
-              const factor = getLightenFactor(highlight.pct); // factor from 1 to 1.3
-              return adjustColorBrightness(baseColor, factor);
-            }
-          }
-        }
-        return baseColor;
-      });
-    }).flat(), // Flatten the array to match ApexCharts' expected format
-  };
 
   return (
     <div>
@@ -983,7 +894,7 @@ const [chartData, setChartData] = useState({
       <div>
         <div>
           <ReactApexChart
-            options={dynamicChartOptions}
+            options={chartData.options}
             series={chartData.series}
             type="bar"
             height={Math.max(500, (strikeRange * 2 + 1) * 50 + 150)}
