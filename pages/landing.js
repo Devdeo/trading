@@ -1117,6 +1117,14 @@ const [chartData, setChartData] = useState({
             height={Math.max(400, (strikeRange * 2 + 1) * 40 + 100)}
           />
         </div>
+        <div style={{ marginTop: '20px' }}>
+          <ReactApexChart
+            options={candlestickData.options}
+            series={candlestickData.series}
+            type="candlestick"
+            height={450}
+          />
+        </div>
       </div>
 
       </div>
