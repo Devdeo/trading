@@ -129,6 +129,10 @@ export default function Landing() {
     error: null
   });
 
+  // AI analysis throttling to respect rate limits
+  const [lastAiCallTime, setLastAiCallTime] = useState(0);
+  const [aiCallTimeout, setAiCallTimeout] = useState(null);
+
   const [volumeChartData, setVolumeChartData] = useState({
   series: [
     { name: 'CE Volume', data: [], color: '#FF0000' }, // Red for CE volume
@@ -270,12 +274,31 @@ const [chartData, setChartData] = useState({
   // Function to fetch AI analysis
   const fetchAIAnalysis = async (symbol, isIndex = false) => {
     try {
+      // Check rate limiting (minimum 90 seconds between calls)
+      const now = Date.now();
+      const timeSinceLastCall = now - lastAiCallTime;
+      const minInterval = 90000; // 90 seconds
+      
+      if (timeSinceLastCall < minInterval) {
+        const remainingTime = Math.ceil((minInterval - timeSinceLastCall) / 1000);
+        setAiAnalysis(prev => ({
+          ...prev,
+          error: `Rate limited. Please wait ${remainingTime} seconds before next analysis.`,
+          loading: false
+        }));
+        return;
+      }
+
       setAiAnalysis(prev => ({ ...prev, loading: true, error: null }));
       
       // Prepare data for AI analysis
       const currentPrice = data.records?.underlyingValue || 0;
       if (!currentPrice || !filteredData.length || !candlestickData.series[0]?.data.length) {
-        console.log('Insufficient data for AI analysis');
+        setAiAnalysis(prev => ({
+          ...prev,
+          loading: false,
+          error: 'Insufficient market data for AI analysis. Please wait for data to load.'
+        }));
         return;
       }
 
@@ -304,6 +327,7 @@ const [chartData, setChartData] = useState({
       
       const response = await axios.post('/api/ai-analysis', analysisPayload);
       
+      setLastAiCallTime(now);
       setAiAnalysis(prev => ({
         ...prev,
         ...response.data,
@@ -315,10 +339,24 @@ const [chartData, setChartData] = useState({
       
     } catch (error) {
       console.error('Error fetching AI analysis:', error);
+      
+      let errorMessage = 'AI analysis failed';
+      
+      // Handle specific error types
+      if (error.response?.status === 429) {
+        errorMessage = 'Rate limit exceeded. AI analysis will retry automatically in ~60 seconds.';
+      } else if (error.response?.status === 503) {
+        errorMessage = 'AI service temporarily overloaded. Please try again in a few minutes.';
+      } else if (error.response?.data?.error) {
+        errorMessage = error.response.data.error;
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
       setAiAnalysis(prev => ({
         ...prev,
         loading: false,
-        error: error.response?.data?.error || error.message || 'AI analysis failed'
+        error: errorMessage
       }));
     }
   };
