@@ -58,53 +58,156 @@ export default function Landing() {
     options: {
       chart: {
         type: 'candlestick',
-        height: 400,
+        height: 450,
+        animations: {
+          enabled: false
+        },
         toolbar: {
-          show: true
+          show: true,
+          tools: {
+            download: true,
+            selection: true,
+            zoom: true,
+            zoomin: true,
+            zoomout: true,
+            pan: true,
+            reset: true
+          }
+        },
+        zoom: {
+          enabled: true,
+          type: 'x',
+          autoScaleYaxis: true,
+          zoomedArea: {
+            fill: {
+              color: '#90CAF9',
+              opacity: 0.4
+            },
+            stroke: {
+              color: '#0D47A1',
+              opacity: 0.4,
+              width: 1
+            }
+          }
+        },
+        pan: {
+          enabled: true
+        },
+        selection: {
+          enabled: true,
+          type: 'x',
+          fill: {
+            color: '#24292e',
+            opacity: 0.1
+          },
+          stroke: {
+            width: 1,
+            dashArray: 3,
+            color: '#24292e',
+            opacity: 0.4
+          }
         }
       },
       title: {
-        text: 'Candlestick Chart',
+        text: 'Price Chart (TradingView Style)',
         align: 'center',
         style: {
-          fontSize: '16px',
-          fontWeight: 'bold'
+          fontSize: '18px',
+          fontWeight: 'bold',
+          color: '#333'
         }
+      },
+      grid: {
+        show: true,
+        borderColor: '#e0e0e0',
+        strokeDashArray: 3,
+        position: 'back'
       },
       xaxis: {
         type: 'datetime',
         labels: {
           formatter: function(val) {
-            return new Date(val).toLocaleTimeString();
+            return new Date(val).toLocaleTimeString('en-US', {
+              hour: '2-digit',
+              minute: '2-digit'
+            });
+          },
+          style: {
+            colors: ['#666'],
+            fontSize: '12px'
           }
+        },
+        axisBorder: {
+          show: true,
+          color: '#e0e0e0'
+        },
+        axisTicks: {
+          show: true,
+          color: '#e0e0e0'
         }
       },
       yaxis: {
         tooltip: {
           enabled: true
+        },
+        labels: {
+          formatter: function(val) {
+            return '₹' + val.toFixed(2);
+          },
+          style: {
+            colors: ['#666'],
+            fontSize: '12px'
+          }
+        },
+        axisBorder: {
+          show: true,
+          color: '#e0e0e0'
         }
       },
       plotOptions: {
         candlestick: {
           colors: {
-            upward: '#26a69a',
-            downward: '#ef5350'
+            upward: '#00C851',
+            downward: '#ff4444'
+          },
+          wick: {
+            useFillColor: true
           }
         }
       },
       tooltip: {
+        enabled: true,
         shared: false,
         custom: function({seriesIndex, dataPointIndex, w}) {
+          if (!w.globals.seriesCandleO || !w.globals.seriesCandleO[seriesIndex]) {
+            return '<div class="apexcharts-tooltip-candlestick">No data available</div>';
+          }
           const o = w.globals.seriesCandleO[seriesIndex][dataPointIndex];
           const h = w.globals.seriesCandleH[seriesIndex][dataPointIndex];
           const l = w.globals.seriesCandleL[seriesIndex][dataPointIndex];
           const c = w.globals.seriesCandleC[seriesIndex][dataPointIndex];
-          return '<div class="apexcharts-tooltip-candlestick">' +
-            '<div>Open: <span class="value">' + o + '</span></div>' +
-            '<div>High: <span class="value">' + h + '</span></div>' +
-            '<div>Low: <span class="value">' + l + '</span></div>' +
-            '<div>Close: <span class="value">' + c + '</span></div>' +
-            '</div>';
+          const change = c - o;
+          const changePercent = ((change / o) * 100).toFixed(2);
+          const changeColor = change >= 0 ? '#00C851' : '#ff4444';
+          return `<div class="apexcharts-tooltip-candlestick" style="padding: 10px; font-size: 12px;">` +
+            `<div style="font-weight: bold; margin-bottom: 5px;">Price Data</div>` +
+            `<div>Open: <span style="font-weight: bold;">₹${o?.toFixed(2) || 'N/A'}</span></div>` +
+            `<div>High: <span style="font-weight: bold;">₹${h?.toFixed(2) || 'N/A'}</span></div>` +
+            `<div>Low: <span style="font-weight: bold;">₹${l?.toFixed(2) || 'N/A'}</span></div>` +
+            `<div>Close: <span style="font-weight: bold;">₹${c?.toFixed(2) || 'N/A'}</span></div>` +
+            `<div style="margin-top: 5px; color: ${changeColor}; font-weight: bold;">` +
+            `Change: ${change >= 0 ? '+' : ''}${change?.toFixed(2) || 'N/A'} (${changePercent}%)` +
+            `</div>` +
+            `</div>`;
+        }
+      },
+      crosshairs: {
+        show: true,
+        position: 'back',
+        stroke: {
+          color: '#b6b6b6',
+          width: 1,
+          dashArray: 3
         }
       }
     }
@@ -1414,7 +1517,8 @@ const [chartData, setChartData] = useState({
       </div>
 
       <div>
-        <div>
+        {/* Open Interest Chart */}
+        <div style={{ marginBottom: '30px' }}>
           <ReactApexChart
             options={chartData.options}
             series={chartData.series}
@@ -1422,20 +1526,24 @@ const [chartData, setChartData] = useState({
             height={Math.max(500, (strikeRange * 2 + 1) * 50 + 150)}
           />
         </div>
+        
+        {/* Candlestick Chart - Enhanced TradingView Style */}
+        <div style={{ marginBottom: '30px', border: '1px solid #e0e0e0', borderRadius: '8px', padding: '10px' }}>
+          <ReactApexChart
+            options={candlestickData.options}
+            series={candlestickData.series}
+            type="candlestick"
+            height={500}
+          />
+        </div>
+        
+        {/* Volume Chart */}
         <div>
           <ReactApexChart
             options={volumeChartData.options}
             series={volumeChartData.series}
             type="bar"
             height={Math.max(400, (strikeRange * 2 + 1) * 40 + 100)}
-          />
-        </div>
-        <div style={{ marginTop: '20px' }}>
-          <ReactApexChart
-            options={candlestickData.options}
-            series={candlestickData.series}
-            type="candlestick"
-            height={450}
           />
         </div>
       </div>
