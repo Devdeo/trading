@@ -9,8 +9,9 @@ channel = "stable-25_05"
 NEXT_TELEMETRY_DISABLED = "1"
 
 [deployment]
-run = ["sh", "-c", "npm run dev"]
-deploymentTarget = "cloudrun"
+run = ["npm", "run", "start"]
+deploymentTarget = "autoscale"
+build = ["npm", "run", "build"]
 
 [[ports]]
 localPort = 3000
@@ -22,6 +23,10 @@ externalPort = 80
 [[ports]]
 localPort = 38559
 externalPort = 3000
+
+[[ports]]
+localPort = 44459
+externalPort = 3001
 
 [workflows]
 runButton = "Project"
