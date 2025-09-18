@@ -248,59 +248,54 @@ const [chartData, setChartData] = useState({
     return rangeMap[timeframe] || rangeMap['5m'];
   };
 
-  // Function to fetch candlestick data from Yahoo Finance
+  // Function to fetch candlestick data via our API endpoint
   const fetchCandlestickData = async (symbol, isIndex = false) => {
     try {
-      const yahooSymbol = getYahooSymbol(symbol, isIndex);
       const { interval, range } = getTimeframeRange(selectedTimeframe);
       
-      const url = `https://query1.finance.yahoo.com/v8/finance/chart/${yahooSymbol}?interval=${interval}&range=${range}`;
+      const response = await axios.get(`/api/candlestick-data?symbol=${symbol}&interval=${interval}&range=${range}&isIndex=${isIndex}`);
+      const result = response.data;
       
-      const response = await axios.get(url);
-      const result = response.data?.chart?.result?.[0];
-      
-      if (result && result.timestamp) {
-        const timestamps = result.timestamp;
-        const quotes = result.indicators?.quote?.[0];
-        
-        if (quotes && quotes.open && quotes.high && quotes.low && quotes.close) {
-          const candleData = timestamps.map((timestamp, index) => ({
-            x: new Date(timestamp * 1000),
-            y: [
-              quotes.open[index]?.toFixed(2) || 0,
-              quotes.high[index]?.toFixed(2) || 0,
-              quotes.low[index]?.toFixed(2) || 0,
-              quotes.close[index]?.toFixed(2) || 0
-            ]
-          }));
-
-          setCandlestickData(prev => ({
-            ...prev,
-            series: [{
-              name: `${symbol} Price`,
-              data: candleData
-            }],
-            options: {
-              ...prev.options,
-              title: {
-                ...prev.options.title,
-                text: `${symbol} - ${selectedTimeframe} Candlestick Chart`
-              }
+      if (result && result.data && result.data.length > 0) {
+        setCandlestickData(prev => ({
+          ...prev,
+          series: [{
+            name: `${symbol} Price`,
+            data: result.data
+          }],
+          options: {
+            ...prev.options,
+            title: {
+              ...prev.options.title,
+              text: `${symbol} - ${selectedTimeframe.toUpperCase()} Candlestick Chart`
             }
-          }));
-        }
+          }
+        }));
+      } else {
+        // Handle no data case
+        setCandlestickData(prev => ({
+          ...prev,
+          series: [{ name: `${symbol} Price`, data: [] }],
+          options: {
+            ...prev.options,
+            title: {
+              ...prev.options.title,
+              text: `${symbol} - No Data Available`
+            }
+          }
+        }));
       }
     } catch (error) {
       console.error('Error fetching candlestick data:', error);
       // Reset chart data on error
       setCandlestickData(prev => ({
         ...prev,
-        series: [{ name: 'Price', data: [] }],
+        series: [{ name: `${symbol} Price`, data: [] }],
         options: {
           ...prev.options,
           title: {
             ...prev.options.title,
-            text: 'Candlestick Chart - No Data'
+            text: `${symbol} - Error Loading Data`
           }
         }
       }));
