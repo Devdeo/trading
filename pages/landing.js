@@ -382,19 +382,19 @@ const [chartData, setChartData] = useState({
       const minInterval = 90000; // 90 seconds
       
       if (timeSinceLastCall < minInterval) {
-        const remainingTime = Math.ceil((minInterval - timeSinceLastCall) / 1000);
         // Rate limited - skip this attempt and try again on next interval
         return;
       }
 
-      setAiAnalysis(prev => ({ ...prev, loading: true }));
-      
       // Prepare data for AI analysis
       const currentPrice = data.records?.underlyingValue || 0;
       if (!currentPrice || !filteredData.length || !candlestickData.series[0]?.data.length) {
         // Insufficient data - skip this attempt and try again on next interval
         return;
       }
+
+      // All prechecks passed - set loading state before making request
+      setAiAnalysis(prev => ({ ...prev, loading: true }));
 
       // Extract OI data for AI analysis
       const oiData = {
@@ -647,12 +647,12 @@ const [chartData, setChartData] = useState({
 
       // Compare with previous series values and store the percentage change.
       const newSeries = [
-        { name: 'CE Open Interest', data: ceOpenInterest },
-        { name: 'PE Open Interest', data: peOpenInterest },
-        { name: 'CE Change Open Interest', data: ceChangeOpenInterest },
-        { name: 'PE Change Open Interest', data: peChangeOpenInterest },
-        { name: 'CE Volume', data: ceVolume },
-        { name: 'PE Volume', data: peVolume },
+        { name: 'CE Open Interest', data: ceOpenInterest, color: '#FF0000' }, // Red for CE
+        { name: 'PE Open Interest', data: peOpenInterest, color: '#008000' }, // Green for PE
+        { name: 'CE Change Open Interest', data: ceChangeOpenInterest, color: '#FFFF00' }, // Yellow for change in CE
+        { name: 'PE Change Open Interest', data: peChangeOpenInterest, color: '#0000FF' }, // Blue for change in PE
+        { name: 'CE Volume', data: ceVolume, color: '#FF0000' },
+        { name: 'PE Volume', data: peVolume, color: '#008000' },
       ];
 
 
@@ -858,6 +858,11 @@ const [chartData, setChartData] = useState({
 
   // Manual AI analysis trigger
   const handleManualAIAnalysis = () => {
+    // Don't allow multiple concurrent requests
+    if (aiAnalysis.loading) {
+      return;
+    }
+    
     // Determine which symbol to analyze and whether it's an index
     let symbolToAnalyze = null;
     let isIndex = false;
