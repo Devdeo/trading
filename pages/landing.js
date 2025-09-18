@@ -623,6 +623,38 @@ const [chartData, setChartData] = useState({
     }
   }, [filteredData, data, strikeRange]);
 
+  // Fetch candlestick data when selectedIndex, selectedSymbol, or selectedTimeframe changes
+  useEffect(() => {
+    let isMounted = true;
+    const fetchData = async () => {
+      if (!isMounted) return;
+      
+      // Determine which symbol to use and whether it's an index
+      let symbolToFetch = null;
+      let isIndex = false;
+      
+      if (selectedIndex) {
+        symbolToFetch = selectedIndex;
+        isIndex = true;
+      } else if (selectedSymbol) {
+        symbolToFetch = selectedSymbol;
+        isIndex = false;
+      }
+      
+      if (symbolToFetch) {
+        await fetchCandlestickData(symbolToFetch, isIndex);
+      }
+    };
+
+    fetchData();
+    const intervalId = setInterval(fetchData, 30000); // Fetch every 30 seconds for candlestick data
+    
+    return () => {
+      isMounted = false;
+      clearInterval(intervalId);
+    };
+  }, [selectedIndex, selectedSymbol, selectedTimeframe]);
+
   // Update chart orientation when isHorizontal changes
   useEffect(() => {
     setChartData(prev => ({
@@ -958,7 +990,7 @@ const [chartData, setChartData] = useState({
         )}
       </div>
 
-      <div style={{ marginBottom: '20px', display: 'flex', gap: '10px', alignItems: 'center' }}>
+      <div style={{ marginBottom: '20px', display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
         <button
           onClick={toggleChartOrientation}
           style={{
@@ -1004,6 +1036,29 @@ const [chartData, setChartData] = useState({
           >
             +
           </button>
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', backgroundColor: '#e8f4f8', padding: '8px', borderRadius: '4px' }}>
+          <label htmlFor="timeframe-select" style={{ fontSize: '14px', fontWeight: 'bold' }}>
+            Timeframe:
+          </label>
+          <select 
+            id="timeframe-select" 
+            value={selectedTimeframe} 
+            onChange={handleTimeframeChange}
+            style={{
+              padding: '4px 8px',
+              borderRadius: '4px',
+              border: '1px solid #ccc',
+              fontSize: '14px',
+              backgroundColor: 'white'
+            }}
+          >
+            <option value="5m">5 Minutes</option>
+            <option value="15m">15 Minutes</option>
+            <option value="30m">30 Minutes</option>
+            <option value="1h">1 Hour</option>
+          </select>
         </div>
       </div>
 
