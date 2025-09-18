@@ -47,6 +47,68 @@ export default function Landing() {
   // Chart controls
   const [isHorizontal, setIsHorizontal] = useState(true);
   const [strikeRange, setStrikeRange] = useState(3); // Number of strikes before and after ATM
+  
+  // Candlestick chart states
+  const [selectedTimeframe, setSelectedTimeframe] = useState('5m');
+  const [candlestickData, setCandlestickData] = useState({
+    series: [{
+      name: 'Price',
+      data: []
+    }],
+    options: {
+      chart: {
+        type: 'candlestick',
+        height: 400,
+        toolbar: {
+          show: true
+        }
+      },
+      title: {
+        text: 'Candlestick Chart',
+        align: 'center',
+        style: {
+          fontSize: '16px',
+          fontWeight: 'bold'
+        }
+      },
+      xaxis: {
+        type: 'datetime',
+        labels: {
+          formatter: function(val) {
+            return new Date(val).toLocaleTimeString();
+          }
+        }
+      },
+      yaxis: {
+        tooltip: {
+          enabled: true
+        }
+      },
+      plotOptions: {
+        candlestick: {
+          colors: {
+            upward: '#26a69a',
+            downward: '#ef5350'
+          }
+        }
+      },
+      tooltip: {
+        shared: false,
+        custom: function({seriesIndex, dataPointIndex, w}) {
+          const o = w.globals.seriesCandleO[seriesIndex][dataPointIndex];
+          const h = w.globals.seriesCandleH[seriesIndex][dataPointIndex];
+          const l = w.globals.seriesCandleL[seriesIndex][dataPointIndex];
+          const c = w.globals.seriesCandleC[seriesIndex][dataPointIndex];
+          return '<div class="apexcharts-tooltip-candlestick">' +
+            '<div>Open: <span class="value">' + o + '</span></div>' +
+            '<div>High: <span class="value">' + h + '</span></div>' +
+            '<div>Low: <span class="value">' + l + '</span></div>' +
+            '<div>Close: <span class="value">' + c + '</span></div>' +
+            '</div>';
+        }
+      }
+    }
+  });
 
   const [volumeChartData, setVolumeChartData] = useState({
   series: [
