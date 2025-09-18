@@ -42,7 +42,7 @@ export default async function handler(req, res) {
     
     // Get AI analysis using Gemini
     const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
+      model: "gemini-2.5-pro",
       config: {
         systemInstruction: `You are an expert financial analyst specializing in options trading and technical analysis. 
         Provide precise, actionable trading recommendations based on real-time market data.
