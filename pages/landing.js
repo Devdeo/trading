@@ -33,6 +33,10 @@ function calculateNetEffect(filteredStrikeRange) {
 
 
 export default function Landing() {
+  // Tab state
+  const [activeTab, setActiveTab] = useState('indian-stocks');
+  
+  // Indian Stock Market states
   const [data, setData] = useState([]);
   const [selectedExpiry, setSelectedExpiry] = useState('');
   const [filteredData, setFilteredData] = useState([]);
@@ -43,6 +47,109 @@ export default function Landing() {
   const [futuresData, setFuturesData] = useState(null);
   const [selectedFuturesExpiry, setSelectedFuturesExpiry] = useState('');
   const [filteredFuturesData, setFilteredFuturesData] = useState([]);
+
+  // Crypto states
+  const [selectedCrypto, setSelectedCrypto] = useState('BTCUSDT');
+  const [cryptoTimeframe, setCryptoTimeframe] = useState('1h');
+  const [cryptoData, setCryptoData] = useState({
+    series: [{
+      name: 'Price',
+      data: []
+    }],
+    options: {
+      chart: {
+        type: 'candlestick',
+        height: 450,
+        animations: {
+          enabled: false
+        },
+        toolbar: {
+          show: true,
+          tools: {
+            download: true,
+            selection: true,
+            zoom: true,
+            zoomin: true,
+            zoomout: true,
+            pan: true,
+            reset: true
+          }
+        }
+      },
+      title: {
+        text: 'Crypto Price Chart',
+        align: 'center',
+        style: {
+          fontSize: '18px',
+          fontWeight: 'bold',
+          color: '#333'
+        }
+      },
+      grid: {
+        show: true,
+        borderColor: '#e0e0e0',
+        strokeDashArray: 3,
+        position: 'back'
+      },
+      xaxis: {
+        type: 'datetime',
+        labels: {
+          formatter: function(val) {
+            return new Date(val).toLocaleTimeString('en-US', {
+              hour: '2-digit',
+              minute: '2-digit'
+            });
+          },
+          style: {
+            colors: ['#666'],
+            fontSize: '12px'
+          }
+        }
+      },
+      yaxis: {
+        tooltip: {
+          enabled: true
+        },
+        labels: {
+          formatter: function(val) {
+            return '$' + val.toFixed(2);
+          },
+          style: {
+            colors: ['#666'],
+            fontSize: '12px'
+          }
+        }
+      },
+      plotOptions: {
+        candlestick: {
+          colors: {
+            upward: '#00C851',
+            downward: '#ff4444'
+          },
+          wick: {
+            useFillColor: true
+          }
+        }
+      }
+    }
+  });
+  const [cryptoCurrentPrice, setCryptoCurrentPrice] = useState(0);
+  const [cryptoAiAnalysis, setCryptoAiAnalysis] = useState({
+    analysis: '',
+    trend: 'NEUTRAL',
+    confidence: 0,
+    entryLevel: 0,
+    stopLoss: 0,
+    target1: 0,
+    target2: 0,
+    riskReward: '',
+    keyLevels: { support: [], resistance: [] },
+    strategy: '',
+    timeHorizon: '',
+    riskLevel: 'MEDIUM',
+    timestamp: null,
+    loading: false
+  });
 
   // Chart controls
   const [isHorizontal, setIsHorizontal] = useState(true);
@@ -343,6 +450,20 @@ const [chartData, setChartData] = useState({
   // Timeframe handler for candlestick chart
   const handleTimeframeChange = (event) => {
     setSelectedTimeframe(event.target.value);
+  };
+
+  // Tab handler
+  const handleTabChange = (tab) => {
+    setActiveTab(tab);
+  };
+
+  // Crypto handlers
+  const handleCryptoChange = (event) => {
+    setSelectedCrypto(event.target.value);
+  };
+
+  const handleCryptoTimeframeChange = (event) => {
+    setCryptoTimeframe(event.target.value);
   };
 
   // Function to get Yahoo Finance symbol format
@@ -856,6 +977,134 @@ const [chartData, setChartData] = useState({
     };
   }, [selectedIndex, selectedSymbol, selectedTimeframe]);
 
+  // Function to fetch crypto data
+  const fetchCryptoData = async (symbol, timeframe) => {
+    try {
+      const response = await axios.get(`/api/crypto-data?symbol=${symbol}&timeframe=${timeframe}`);
+      const result = response.data;
+      
+      if (result && result.data && result.data.length > 0) {
+        setCryptoData(prev => ({
+          ...prev,
+          series: [{
+            name: `${symbol} Price`,
+            data: result.data
+          }],
+          options: {
+            ...prev.options,
+            title: {
+              ...prev.options.title,
+              text: `${symbol} - ${timeframe.toUpperCase()} Crypto Chart`
+            }
+          }
+        }));
+        
+        // Set current price from the latest data point
+        const latestData = result.data[result.data.length - 1];
+        if (latestData && latestData.y && latestData.y.length >= 4) {
+          setCryptoCurrentPrice(latestData.y[3]); // Close price
+        }
+      } else {
+        setCryptoData(prev => ({
+          ...prev,
+          series: [{ name: `${symbol} Price`, data: [] }],
+          options: {
+            ...prev.options,
+            title: {
+              ...prev.options.title,
+              text: `${symbol} - No Data Available`
+            }
+          }
+        }));
+      }
+    } catch (error) {
+      console.error('Error fetching crypto data:', error);
+      setCryptoData(prev => ({
+        ...prev,
+        series: [{ name: `${symbol} Price`, data: [] }],
+        options: {
+          ...prev.options,
+          title: {
+            ...prev.options.title,
+            text: `${symbol} - Error Loading Data`
+          }
+        }
+      }));
+    }
+  };
+
+  // Function to fetch crypto AI analysis
+  const fetchCryptoAIAnalysis = async (symbol) => {
+    try {
+      if (cryptoAiAnalysis.loading) {
+        return;
+      }
+
+      if (!cryptoData.series[0]?.data.length || !cryptoCurrentPrice) {
+        return;
+      }
+
+      setCryptoAiAnalysis(prev => ({ ...prev, loading: true }));
+
+      const analysisPayload = {
+        symbol,
+        candlestickData: cryptoData.series[0].data,
+        currentPrice: cryptoCurrentPrice,
+        timeframe: cryptoTimeframe,
+        type: 'crypto'
+      };
+
+      console.log(`Requesting crypto AI analysis for ${symbol} at $${cryptoCurrentPrice}`);
+      
+      const response = await axios.post('/api/crypto-ai-analysis', analysisPayload);
+      
+      setCryptoAiAnalysis(prev => ({
+        ...prev,
+        ...response.data,
+        loading: false,
+        error: null
+      }));
+      
+      console.log(`Crypto AI Analysis completed: ${response.data.trend} trend with ${response.data.confidence}% confidence`);
+      
+    } catch (error) {
+      console.error('Crypto AI analysis error:', error);
+      setCryptoAiAnalysis(prev => ({
+        ...prev,
+        loading: false
+      }));
+    }
+  };
+
+  // Manual crypto AI analysis trigger
+  const handleCryptoAIAnalysis = () => {
+    if (cryptoAiAnalysis.loading) {
+      return;
+    }
+    
+    if (selectedCrypto && cryptoData.series[0]?.data.length > 0) {
+      fetchCryptoAIAnalysis(selectedCrypto);
+    }
+  };
+
+  // Fetch crypto data when crypto parameters change
+  useEffect(() => {
+    let isMounted = true;
+    const fetchData = async () => {
+      if (!selectedCrypto || !cryptoTimeframe || !isMounted || activeTab !== 'crypto') return;
+      
+      await fetchCryptoData(selectedCrypto, cryptoTimeframe);
+    };
+
+    fetchData();
+    const intervalId = setInterval(fetchData, 30000); // Fetch every 30 seconds
+    
+    return () => {
+      isMounted = false;
+      clearInterval(intervalId);
+    };
+  }, [selectedCrypto, cryptoTimeframe, activeTab]);
+
   // Manual AI analysis trigger
   const handleManualAIAnalysis = () => {
     // Don't allow multiple concurrent requests
@@ -941,19 +1190,63 @@ const [chartData, setChartData] = useState({
 
   return (
     <div>
-      <div>
-        <label htmlFor="Select">
-          Select Index:
-          <select value={selectedIndex} onChange={handleIndex}>
-            <option value="">---Select---</option>
-            <option value="NIFTY">NIFTY</option>
-            <option value="BANKNIFTY">BANKNIFTY</option>
-            <option value="FINNIFTY">FINNIFTY</option>
-            <option value="MIDCPNIFTY">MID CAP NIFTY</option>
-            <option value="NIFTYNXT50">NIFTY NEXT FIFTY</option>
-          </select>
-        </label>
+      {/* Tab Navigation */}
+      <div style={{
+        display: 'flex',
+        backgroundColor: '#f8f9fa',
+        borderBottom: '2px solid #e9ecef',
+        marginBottom: '20px'
+      }}>
+        <button
+          onClick={() => handleTabChange('indian-stocks')}
+          style={{
+            padding: '12px 24px',
+            border: 'none',
+            backgroundColor: activeTab === 'indian-stocks' ? '#007bff' : 'transparent',
+            color: activeTab === 'indian-stocks' ? 'white' : '#007bff',
+            cursor: 'pointer',
+            fontSize: '16px',
+            fontWeight: 'bold',
+            borderRadius: '8px 8px 0 0',
+            transition: 'all 0.3s ease'
+          }}
+        >
+          📊 Indian Stock Market
+        </button>
+        <button
+          onClick={() => handleTabChange('crypto')}
+          style={{
+            padding: '12px 24px',
+            border: 'none',
+            backgroundColor: activeTab === 'crypto' ? '#007bff' : 'transparent',
+            color: activeTab === 'crypto' ? 'white' : '#007bff',
+            cursor: 'pointer',
+            fontSize: '16px',
+            fontWeight: 'bold',
+            borderRadius: '8px 8px 0 0',
+            transition: 'all 0.3s ease'
+          }}
+        >
+          ₿ Crypto
+        </button>
       </div>
+
+      {/* Indian Stock Market Tab */}
+      {activeTab === 'indian-stocks' && (
+        <div>
+          <div>
+            <label htmlFor="Select">
+              Select Index:
+              <select value={selectedIndex} onChange={handleIndex}>
+                <option value="">---Select---</option>
+                <option value="NIFTY">NIFTY</option>
+                <option value="BANKNIFTY">BANKNIFTY</option>
+                <option value="FINNIFTY">FINNIFTY</option>
+                <option value="MIDCPNIFTY">MID CAP NIFTY</option>
+                <option value="NIFTYNXT50">NIFTY NEXT FIFTY</option>
+              </select>
+            </label>
+          </div>
       <div>
         <label htmlFor="expiry-date">Select Expiry Date:</label>
         <select id="expiry-date" value={selectedExpiry} onChange={handleExpiryChange}>
@@ -1552,7 +1845,291 @@ const [chartData, setChartData] = useState({
           />
         </div>
       </div>
+        </div>
+      )}
 
-      </div>
+      {/* Crypto Tab */}
+      {activeTab === 'crypto' && (
+        <div>
+          {/* Crypto Controls */}
+          <div style={{ marginBottom: '20px', display: 'flex', gap: '20px', alignItems: 'center', flexWrap: 'wrap' }}>
+            <div>
+              <label htmlFor="crypto-select" style={{ marginRight: '10px', fontWeight: 'bold' }}>
+                Select Crypto:
+              </label>
+              <select 
+                id="crypto-select" 
+                value={selectedCrypto} 
+                onChange={handleCryptoChange}
+                style={{
+                  padding: '8px 12px',
+                  borderRadius: '4px',
+                  border: '1px solid #ccc',
+                  fontSize: '14px',
+                  backgroundColor: 'white',
+                  minWidth: '150px'
+                }}
+              >
+                <option value="BTCUSDT">BTC/USD</option>
+                <option value="ETHUSDT">ETH/USD</option>
+              </select>
+            </div>
+
+            <div>
+              <label htmlFor="crypto-timeframe-select" style={{ marginRight: '10px', fontWeight: 'bold' }}>
+                Timeframe:
+              </label>
+              <select 
+                id="crypto-timeframe-select" 
+                value={cryptoTimeframe} 
+                onChange={handleCryptoTimeframeChange}
+                style={{
+                  padding: '8px 12px',
+                  borderRadius: '4px',
+                  border: '1px solid #ccc',
+                  fontSize: '14px',
+                  backgroundColor: 'white',
+                  minWidth: '120px'
+                }}
+              >
+                <option value="1h">1 Hour</option>
+                <option value="2h">2 Hours</option>
+                <option value="5h">5 Hours</option>
+                <option value="10h">10 Hours</option>
+                <option value="1d">1 Day</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Crypto Current Price Display */}
+          {cryptoCurrentPrice > 0 && (
+            <div style={{ 
+              display: 'flex', 
+              justifyContent: 'center', 
+              marginBottom: '20px',
+              padding: '15px',
+              backgroundColor: '#f5f5f5',
+              borderRadius: '8px'
+            }}>
+              <div style={{ textAlign: 'center' }}>
+                <strong>Current Price:</strong>
+                <div style={{ 
+                  fontSize: '24px', 
+                  color: '#007bff',
+                  fontWeight: 'bold'
+                }}>
+                  ${cryptoCurrentPrice.toFixed(2)}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Crypto AI Analysis Section */}
+          <div style={{
+            margin: '20px 0',
+            padding: '20px',
+            backgroundColor: '#f8f9fa',
+            borderRadius: '10px',
+            border: '2px solid #e9ecef'
+          }}>
+            <h3 style={{ 
+              textAlign: 'center', 
+              marginBottom: '15px',
+              color: '#495057',
+              fontSize: '18px',
+              fontWeight: 'bold'
+            }}>
+              🤖 Crypto AI Analysis
+            </h3>
+            
+            {/* Manual Crypto AI Analysis Button */}
+            <div style={{ textAlign: 'center', marginBottom: '20px' }}>
+              <button
+                onClick={handleCryptoAIAnalysis}
+                disabled={cryptoAiAnalysis.loading}
+                style={{
+                  backgroundColor: cryptoAiAnalysis.loading ? '#6c757d' : '#007bff',
+                  color: 'white',
+                  border: 'none',
+                  padding: '12px 24px',
+                  borderRadius: '8px',
+                  fontSize: '16px',
+                  fontWeight: 'bold',
+                  cursor: cryptoAiAnalysis.loading ? 'not-allowed' : 'pointer',
+                  transition: 'background-color 0.3s ease'
+                }}
+              >
+                {cryptoAiAnalysis.loading ? '🧠 Analyzing...' : '🔍 Analyze with AI'}
+              </button>
+            </div>
+            
+            {cryptoAiAnalysis.loading && (
+              <div style={{ textAlign: 'center', padding: '20px' }}>
+                <div style={{ fontSize: '16px', color: '#6c757d' }}>
+                  🧠 Analyzing crypto market data...
+                </div>
+              </div>
+            )}
+
+            {!cryptoAiAnalysis.loading && cryptoAiAnalysis.analysis && (
+              <div>
+                {/* Trend and Confidence */}
+                <div style={{
+                  display: 'flex',
+                  justifyContent: 'space-around',
+                  marginBottom: '20px',
+                  flexWrap: 'wrap',
+                  gap: '10px'
+                }}>
+                  <div style={{ 
+                    textAlign: 'center',
+                    backgroundColor: cryptoAiAnalysis.trend === 'BULLISH' ? '#d4edda' : 
+                                   cryptoAiAnalysis.trend === 'BEARISH' ? '#f8d7da' : '#fff3cd',
+                    padding: '10px',
+                    borderRadius: '8px',
+                    minWidth: '120px'
+                  }}>
+                    <strong>Trend</strong>
+                    <div style={{ 
+                      fontSize: '16px', 
+                      fontWeight: 'bold',
+                      color: cryptoAiAnalysis.trend === 'BULLISH' ? '#155724' : 
+                             cryptoAiAnalysis.trend === 'BEARISH' ? '#721c24' : '#856404'
+                    }}>
+                      {cryptoAiAnalysis.trend === 'BULLISH' ? '📈 BULLISH' : 
+                       cryptoAiAnalysis.trend === 'BEARISH' ? '📉 BEARISH' : 
+                       cryptoAiAnalysis.trend === 'VOLATILE' ? '⚡ VOLATILE' : '➡️ NEUTRAL'}
+                    </div>
+                  </div>
+                  
+                  <div style={{ textAlign: 'center', backgroundColor: '#e2e3e5', padding: '10px', borderRadius: '8px', minWidth: '120px' }}>
+                    <strong>Confidence</strong>
+                    <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#495057' }}>
+                      {cryptoAiAnalysis.confidence}%
+                    </div>
+                  </div>
+
+                  <div style={{ textAlign: 'center', backgroundColor: '#cce5ff', padding: '10px', borderRadius: '8px', minWidth: '120px' }}>
+                    <strong>Risk Level</strong>
+                    <div style={{ 
+                      fontSize: '16px', 
+                      fontWeight: 'bold',
+                      color: cryptoAiAnalysis.riskLevel === 'HIGH' ? '#721c24' : 
+                             cryptoAiAnalysis.riskLevel === 'MEDIUM' ? '#856404' : '#155724'
+                    }}>
+                      {cryptoAiAnalysis.riskLevel}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Trading Levels */}
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
+                  gap: '15px',
+                  marginBottom: '20px'
+                }}>
+                  <div style={{ textAlign: 'center', backgroundColor: '#d1ecf1', padding: '12px', borderRadius: '8px' }}>
+                    <strong>Entry Level</strong>
+                    <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#0c5460' }}>
+                      ${cryptoAiAnalysis.entryLevel?.toFixed(2) || 'N/A'}
+                    </div>
+                  </div>
+                  
+                  <div style={{ textAlign: 'center', backgroundColor: '#f8d7da', padding: '12px', borderRadius: '8px' }}>
+                    <strong>Stop Loss</strong>
+                    <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#721c24' }}>
+                      ${cryptoAiAnalysis.stopLoss?.toFixed(2) || 'N/A'}
+                    </div>
+                  </div>
+                  
+                  <div style={{ textAlign: 'center', backgroundColor: '#d4edda', padding: '12px', borderRadius: '8px' }}>
+                    <strong>Target 1</strong>
+                    <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#155724' }}>
+                      ${cryptoAiAnalysis.target1?.toFixed(2) || 'N/A'}
+                    </div>
+                  </div>
+                  
+                  {cryptoAiAnalysis.target2 && cryptoAiAnalysis.target2 > 0 && (
+                    <div style={{ textAlign: 'center', backgroundColor: '#d4edda', padding: '12px', borderRadius: '8px' }}>
+                      <strong>Target 2</strong>
+                      <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#155724' }}>
+                        ${cryptoAiAnalysis.target2.toFixed(2)}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Strategy and Analysis */}
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: '1fr 1fr',
+                  gap: '15px',
+                  marginBottom: '15px'
+                }}>
+                  {cryptoAiAnalysis.strategy && (
+                    <div style={{ backgroundColor: '#fff3cd', padding: '12px', borderRadius: '8px' }}>
+                      <strong>Strategy:</strong>
+                      <div style={{ marginTop: '5px', fontSize: '14px' }}>
+                        {cryptoAiAnalysis.strategy}
+                      </div>
+                    </div>
+                  )}
+                  
+                  {cryptoAiAnalysis.riskReward && (
+                    <div style={{ backgroundColor: '#e2e3e5', padding: '12px', borderRadius: '8px' }}>
+                      <strong>Risk:Reward Ratio:</strong>
+                      <div style={{ marginTop: '5px', fontSize: '16px', fontWeight: 'bold' }}>
+                        {cryptoAiAnalysis.riskReward}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Analysis Text */}
+                {cryptoAiAnalysis.analysis && (
+                  <div style={{
+                    backgroundColor: '#ffffff',
+                    padding: '15px',
+                    borderRadius: '8px',
+                    border: '1px solid #dee2e6',
+                    fontSize: '14px',
+                    lineHeight: '1.5'
+                  }}>
+                    <strong>💡 Analysis:</strong>
+                    <div style={{ marginTop: '8px' }}>
+                      {cryptoAiAnalysis.analysis}
+                    </div>
+                  </div>
+                )}
+
+                {/* Timestamp */}
+                {cryptoAiAnalysis.timestamp && (
+                  <div style={{ 
+                    textAlign: 'center', 
+                    fontSize: '12px', 
+                    color: '#6c757d',
+                    marginTop: '15px'
+                  }}>
+                    Last Updated: {new Date(cryptoAiAnalysis.timestamp).toLocaleString()}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Crypto Chart */}
+          <div style={{ marginBottom: '30px', border: '1px solid #e0e0e0', borderRadius: '8px', padding: '10px' }}>
+            <ReactApexChart
+              options={cryptoData.options}
+              series={cryptoData.series}
+              type="candlestick"
+              height={500}
+            />
+          </div>
+        </div>
+      )}
+
+    </div>
   );
 }
