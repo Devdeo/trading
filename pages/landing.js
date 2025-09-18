@@ -125,8 +125,7 @@ export default function Landing() {
     timeHorizon: '',
     riskLevel: 'MEDIUM',
     timestamp: null,
-    loading: false,
-    error: null
+    loading: false
   });
 
   // AI analysis throttling to respect rate limits
@@ -281,24 +280,16 @@ const [chartData, setChartData] = useState({
       
       if (timeSinceLastCall < minInterval) {
         const remainingTime = Math.ceil((minInterval - timeSinceLastCall) / 1000);
-        setAiAnalysis(prev => ({
-          ...prev,
-          error: `Rate limited. Please wait ${remainingTime} seconds before next analysis.`,
-          loading: false
-        }));
+        // Rate limited - skip this attempt and try again on next interval
         return;
       }
 
-      setAiAnalysis(prev => ({ ...prev, loading: true, error: null }));
+      setAiAnalysis(prev => ({ ...prev, loading: true }));
       
       // Prepare data for AI analysis
       const currentPrice = data.records?.underlyingValue || 0;
       if (!currentPrice || !filteredData.length || !candlestickData.series[0]?.data.length) {
-        setAiAnalysis(prev => ({
-          ...prev,
-          loading: false,
-          error: 'Insufficient market data for AI analysis. Please wait for data to load.'
-        }));
+        // Insufficient data - skip this attempt and try again on next interval
         return;
       }
 
@@ -338,7 +329,7 @@ const [chartData, setChartData] = useState({
       console.log(`AI Analysis completed: ${response.data.trend} trend with ${response.data.confidence}% confidence`);
       
     } catch (error) {
-      console.error('Error fetching AI analysis:', error);
+      // Silently handle AI analysis errors - no user notification
       
       let errorMessage = 'AI analysis failed';
       
@@ -355,8 +346,7 @@ const [chartData, setChartData] = useState({
       
       setAiAnalysis(prev => ({
         ...prev,
-        loading: false,
-        error: errorMessage
+        loading: false
       }));
     }
   };
@@ -399,7 +389,7 @@ const [chartData, setChartData] = useState({
         }));
       }
     } catch (error) {
-      console.error('Error fetching candlestick data:', error);
+      // Silently retry on next interval - reset chart data on error
       // Reset chart data on error
       setCandlestickData(prev => ({
         ...prev,
@@ -426,7 +416,7 @@ const [chartData, setChartData] = useState({
           setData(response.data);
         }
       } catch (error) {
-        console.error('Error fetching data:', error);
+        // Silently retry on next interval
       }
     };
 
@@ -451,7 +441,7 @@ const [chartData, setChartData] = useState({
           setLiveData(response1.data);
         }
       } catch (error) {
-        console.error('Error fetching futures data:', error.message);
+        // Silently retry on next interval
       }
     };
 
@@ -1270,20 +1260,8 @@ const [chartData, setChartData] = useState({
           </div>
         )}
 
-        {aiAnalysis.error && (
-          <div style={{ 
-            textAlign: 'center', 
-            padding: '15px',
-            backgroundColor: '#f8d7da',
-            color: '#721c24',
-            borderRadius: '5px',
-            margin: '10px 0'
-          }}>
-            ⚠️ {aiAnalysis.error}
-          </div>
-        )}
 
-        {!aiAnalysis.loading && !aiAnalysis.error && aiAnalysis.analysis && (
+        {!aiAnalysis.loading && aiAnalysis.analysis && (
           <div>
             {/* Trend and Confidence */}
             <div style={{
