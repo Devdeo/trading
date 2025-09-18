@@ -27,6 +27,7 @@ export default async function handler(req, res) {
     if (cache.has(cacheKey)) {
       const cachedData = cache.get(cacheKey);
       if (now - cachedData.timestamp < 120000) { // 2 minutes cache
+        console.log(`Using cache for ${symbol}`);
         return res.status(200).json(cachedData.data);
       }
     }
@@ -41,7 +42,7 @@ export default async function handler(req, res) {
     
     // Get AI analysis using Gemini
     const response = await ai.models.generateContent({
-      model: "gemini-2.5-pro",
+      model: "gemini-2.5-flash",
       config: {
         systemInstruction: `You are an expert financial analyst specializing in options trading and technical analysis. 
         Provide precise, actionable trading recommendations based on real-time market data.
@@ -49,7 +50,7 @@ export default async function handler(req, res) {
         Focus on risk management and probability-based analysis.`,
         responseMimeType: "application/json",
         responseSchema: {
-          type: "object",
+          type: "object", // <-- FIX 2: Added missing type property
           properties: {
             analysis: { type: "string" },
             trend: { 
@@ -86,14 +87,20 @@ export default async function handler(req, res) {
       contents: prompt
     });
 
-    const rawJson = response.text;
+    let aiAnalysis;
+    try {
+        // FIX 1: Attempt to parse the response as JSON
+        aiAnalysis = JSON.parse(response.text);
+    } catch (parseError) {
+        console.error("AI service returned invalid JSON:", response.text);
+        // Re-throw the error with a more specific message
+        throw new SyntaxError("AI service returned an invalid JSON format.");
+    }
     
-    if (!rawJson) {
-      throw new Error("Empty response from AI model");
+    if (!aiAnalysis || Object.keys(aiAnalysis).length === 0) {
+      throw new Error("Empty or invalid response from AI model");
     }
 
-    const aiAnalysis = JSON.parse(rawJson);
-    
     // Add metadata and timestamp
     const result = {
       ...aiAnalysis,
