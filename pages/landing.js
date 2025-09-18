@@ -110,6 +110,25 @@ export default function Landing() {
     }
   });
 
+  // AI Analysis states
+  const [aiAnalysis, setAiAnalysis] = useState({
+    analysis: '',
+    trend: 'NEUTRAL',
+    confidence: 0,
+    entryLevel: 0,
+    stopLoss: 0,
+    target1: 0,
+    target2: 0,
+    riskReward: '',
+    keyLevels: { support: [], resistance: [] },
+    strategy: '',
+    timeHorizon: '',
+    riskLevel: 'MEDIUM',
+    timestamp: null,
+    loading: false,
+    error: null
+  });
+
   const [volumeChartData, setVolumeChartData] = useState({
   series: [
     { name: 'CE Volume', data: [], color: '#FF0000' }, // Red for CE volume
@@ -246,6 +265,62 @@ const [chartData, setChartData] = useState({
       '1h': { interval: '1h', range: '5d' }
     };
     return rangeMap[timeframe] || rangeMap['5m'];
+  };
+
+  // Function to fetch AI analysis
+  const fetchAIAnalysis = async (symbol, isIndex = false) => {
+    try {
+      setAiAnalysis(prev => ({ ...prev, loading: true, error: null }));
+      
+      // Prepare data for AI analysis
+      const currentPrice = data.records?.underlyingValue || 0;
+      if (!currentPrice || !filteredData.length || !candlestickData.series[0]?.data.length) {
+        console.log('Insufficient data for AI analysis');
+        return;
+      }
+
+      // Extract OI data for AI analysis
+      const oiData = {
+        ceOpenInterest: filteredData.map(option => option.CE?.openInterest || 0),
+        peOpenInterest: filteredData.map(option => option.PE?.openInterest || 0),
+        ceChangeOpenInterest: filteredData.map(option => option.CE?.changeinOpenInterest || 0),
+        peChangeOpenInterest: filteredData.map(option => option.PE?.changeinOpenInterest || 0),
+        strikePrices: filteredData.map(option => option.strikePrice)
+      };
+
+      // Use candlestick data
+      const candleData = candlestickData.series[0].data;
+      
+      const analysisPayload = {
+        symbol,
+        oiData,
+        candlestickData: candleData,
+        currentPrice,
+        timeframe: selectedTimeframe,
+        sentiment: liveData
+      };
+
+      console.log(`Requesting AI analysis for ${symbol} at ₹${currentPrice}`);
+      
+      const response = await axios.post('/api/ai-analysis', analysisPayload);
+      
+      setAiAnalysis(prev => ({
+        ...prev,
+        ...response.data,
+        loading: false,
+        error: null
+      }));
+      
+      console.log(`AI Analysis completed: ${response.data.trend} trend with ${response.data.confidence}% confidence`);
+      
+    } catch (error) {
+      console.error('Error fetching AI analysis:', error);
+      setAiAnalysis(prev => ({
+        ...prev,
+        loading: false,
+        error: error.response?.data?.error || error.message || 'AI analysis failed'
+      }));
+    }
   };
 
   // Function to fetch candlestick data via our API endpoint
@@ -649,6 +724,42 @@ const [chartData, setChartData] = useState({
       clearInterval(intervalId);
     };
   }, [selectedIndex, selectedSymbol, selectedTimeframe]);
+
+  // Trigger AI analysis when data is available and updated
+  useEffect(() => {
+    let isMounted = true;
+    const triggerAIAnalysis = async () => {
+      if (!isMounted) return;
+      
+      // Determine which symbol to analyze and whether it's an index
+      let symbolToAnalyze = null;
+      let isIndex = false;
+      
+      if (selectedIndex && data.records?.data?.length > 0 && filteredData.length > 0) {
+        symbolToAnalyze = selectedIndex;
+        isIndex = true;
+      } else if (selectedSymbol && futuresData?.records?.data?.length > 0 && filteredFuturesData.length > 0) {
+        symbolToAnalyze = selectedSymbol;
+        isIndex = false;
+      }
+      
+      // Only proceed if we have both candlestick data and OI data
+      if (symbolToAnalyze && candlestickData.series[0]?.data.length > 0) {
+        // Add a small delay to ensure all data is processed
+        setTimeout(() => {
+          if (isMounted) {
+            fetchAIAnalysis(symbolToAnalyze, isIndex);
+          }
+        }, 2000); // 2-second delay
+      }
+    };
+
+    triggerAIAnalysis();
+    
+    return () => {
+      isMounted = false;
+    };
+  }, [filteredData, filteredFuturesData, candlestickData, selectedTimeframe, liveData.netEffect]);
 
   // Update chart orientation when isHorizontal changes
   useEffect(() => {
@@ -1093,6 +1204,192 @@ const [chartData, setChartData] = useState({
             {pcr || 'N/A'}
           </div>
         </div>
+      </div>
+
+      {/* AI Analysis Display */}
+      <div style={{
+        margin: '20px 0',
+        padding: '20px',
+        backgroundColor: '#f8f9fa',
+        borderRadius: '10px',
+        border: '2px solid #e9ecef'
+      }}>
+        <h3 style={{ 
+          textAlign: 'center', 
+          marginBottom: '15px',
+          color: '#495057',
+          fontSize: '18px',
+          fontWeight: 'bold'
+        }}>
+          🤖 AI Market Analysis
+        </h3>
+        
+        {aiAnalysis.loading && (
+          <div style={{ textAlign: 'center', padding: '20px' }}>
+            <div style={{ fontSize: '16px', color: '#6c757d' }}>
+              🧠 Analyzing market data...
+            </div>
+          </div>
+        )}
+
+        {aiAnalysis.error && (
+          <div style={{ 
+            textAlign: 'center', 
+            padding: '15px',
+            backgroundColor: '#f8d7da',
+            color: '#721c24',
+            borderRadius: '5px',
+            margin: '10px 0'
+          }}>
+            ⚠️ {aiAnalysis.error}
+          </div>
+        )}
+
+        {!aiAnalysis.loading && !aiAnalysis.error && aiAnalysis.analysis && (
+          <div>
+            {/* Trend and Confidence */}
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-around',
+              marginBottom: '20px',
+              flexWrap: 'wrap',
+              gap: '10px'
+            }}>
+              <div style={{ 
+                textAlign: 'center',
+                backgroundColor: aiAnalysis.trend === 'BULLISH' ? '#d4edda' : 
+                               aiAnalysis.trend === 'BEARISH' ? '#f8d7da' : '#fff3cd',
+                padding: '10px',
+                borderRadius: '8px',
+                minWidth: '120px'
+              }}>
+                <strong>Trend</strong>
+                <div style={{ 
+                  fontSize: '16px', 
+                  fontWeight: 'bold',
+                  color: aiAnalysis.trend === 'BULLISH' ? '#155724' : 
+                         aiAnalysis.trend === 'BEARISH' ? '#721c24' : '#856404'
+                }}>
+                  {aiAnalysis.trend === 'BULLISH' ? '📈 BULLISH' : 
+                   aiAnalysis.trend === 'BEARISH' ? '📉 BEARISH' : 
+                   aiAnalysis.trend === 'VOLATILE' ? '⚡ VOLATILE' : '➡️ NEUTRAL'}
+                </div>
+              </div>
+              
+              <div style={{ textAlign: 'center', backgroundColor: '#e2e3e5', padding: '10px', borderRadius: '8px', minWidth: '120px' }}>
+                <strong>Confidence</strong>
+                <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#495057' }}>
+                  {aiAnalysis.confidence}%
+                </div>
+              </div>
+
+              <div style={{ textAlign: 'center', backgroundColor: '#cce5ff', padding: '10px', borderRadius: '8px', minWidth: '120px' }}>
+                <strong>Risk Level</strong>
+                <div style={{ 
+                  fontSize: '16px', 
+                  fontWeight: 'bold',
+                  color: aiAnalysis.riskLevel === 'HIGH' ? '#721c24' : 
+                         aiAnalysis.riskLevel === 'MEDIUM' ? '#856404' : '#155724'
+                }}>
+                  {aiAnalysis.riskLevel}
+                </div>
+              </div>
+            </div>
+
+            {/* Trading Levels */}
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
+              gap: '15px',
+              marginBottom: '20px'
+            }}>
+              <div style={{ textAlign: 'center', backgroundColor: '#d1ecf1', padding: '12px', borderRadius: '8px' }}>
+                <strong>Entry Level</strong>
+                <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#0c5460' }}>
+                  ₹{aiAnalysis.entryLevel?.toFixed(2) || 'N/A'}
+                </div>
+              </div>
+              
+              <div style={{ textAlign: 'center', backgroundColor: '#f8d7da', padding: '12px', borderRadius: '8px' }}>
+                <strong>Stop Loss</strong>
+                <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#721c24' }}>
+                  ₹{aiAnalysis.stopLoss?.toFixed(2) || 'N/A'}
+                </div>
+              </div>
+              
+              <div style={{ textAlign: 'center', backgroundColor: '#d4edda', padding: '12px', borderRadius: '8px' }}>
+                <strong>Target 1</strong>
+                <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#155724' }}>
+                  ₹{aiAnalysis.target1?.toFixed(2) || 'N/A'}
+                </div>
+              </div>
+              
+              {aiAnalysis.target2 && aiAnalysis.target2 > 0 && (
+                <div style={{ textAlign: 'center', backgroundColor: '#d4edda', padding: '12px', borderRadius: '8px' }}>
+                  <strong>Target 2</strong>
+                  <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#155724' }}>
+                    ₹{aiAnalysis.target2.toFixed(2)}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Strategy and Analysis */}
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: '1fr 1fr',
+              gap: '15px',
+              marginBottom: '15px'
+            }}>
+              {aiAnalysis.strategy && (
+                <div style={{ backgroundColor: '#fff3cd', padding: '12px', borderRadius: '8px' }}>
+                  <strong>Strategy:</strong>
+                  <div style={{ marginTop: '5px', fontSize: '14px' }}>
+                    {aiAnalysis.strategy}
+                  </div>
+                </div>
+              )}
+              
+              {aiAnalysis.riskReward && (
+                <div style={{ backgroundColor: '#e2e3e5', padding: '12px', borderRadius: '8px' }}>
+                  <strong>Risk:Reward Ratio:</strong>
+                  <div style={{ marginTop: '5px', fontSize: '16px', fontWeight: 'bold' }}>
+                    {aiAnalysis.riskReward}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Analysis Text */}
+            {aiAnalysis.analysis && (
+              <div style={{
+                backgroundColor: '#ffffff',
+                padding: '15px',
+                borderRadius: '8px',
+                border: '1px solid #dee2e6',
+                fontSize: '14px',
+                lineHeight: '1.5'
+              }}>
+                <strong>💡 Analysis:</strong>
+                <div style={{ marginTop: '8px' }}>
+                  {aiAnalysis.analysis}
+                </div>
+              </div>
+            )}
+
+            {/* Timestamp */}
+            {aiAnalysis.timestamp && (
+              <div style={{ 
+                textAlign: 'center', 
+                fontSize: '12px', 
+                color: '#6c757d',
+                marginTop: '15px'
+              }}>
+                Last Updated: {new Date(aiAnalysis.timestamp).toLocaleString()}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       <div>
