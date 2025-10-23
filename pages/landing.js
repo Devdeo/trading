@@ -47,6 +47,11 @@ export default function Landing() {
   const [futuresData, setFuturesData] = useState(null);
   const [selectedFuturesExpiry, setSelectedFuturesExpiry] = useState('');
   const [filteredFuturesData, setFilteredFuturesData] = useState([]);
+  
+  // Combined selection states
+  const [searchText, setSearchText] = useState('');
+  const [isIndexSelected, setIsIndexSelected] = useState(false);
+  const [showDropdown, setShowDropdown] = useState(false);
 
   // Crypto states
   const [selectedCrypto, setSelectedCrypto] = useState('BTCUSDT');
@@ -419,14 +424,71 @@ const [chartData, setChartData] = useState({
 
 
 
-  // Handler for selecting an index
-  const handleIndex = (event) => {
-    setSelectedIndex(event.target.value);
+  // Combined list of indices and symbols
+  const indices = [
+    { value: 'NIFTY', label: 'NIFTY', type: 'index' },
+    { value: 'BANKNIFTY', label: 'BANKNIFTY', type: 'index' },
+    { value: 'FINNIFTY', label: 'FINNIFTY', type: 'index' },
+    { value: 'MIDCPNIFTY', label: 'MID CAP NIFTY', type: 'index' },
+    { value: 'NIFTYNXT50', label: 'NIFTY NEXT FIFTY', type: 'index' }
+  ];
+
+  const symbols = [
+    'AARTIIND', 'ABB', 'ABCAPITAL', 'ABFRL', 'ACC', 'ADANIENSOL', 'ADANIENT', 'ADANIGREEN', 'ADANIPORTS',
+    'ALKEM', 'AMBUJACEM', 'ANGELONE', 'APLAPOLLO', 'APOLLOHOSP', 'APOLLOTYRE', 'ASHOKLEY', 'ASIANPAINT',
+    'ASTRAL', 'ATGL', 'AUBANK', 'AUROPHARMA', 'AXISBANK', 'BAJAJ-AUTO', 'BAJAJFINSV', 'BAJFINANCE',
+    'BALKRISIND', 'BANDHANBNK', 'BANKBARODA', 'BANKINDIA', 'BEL', 'BERGEPAINT', 'BHARATFORG', 'BHARTIARTL',
+    'BHEL', 'BIOCON', 'BOSCHLTD', 'BPCL', 'BRITANNIA', 'BSE', 'BSOFT', 'CAMS', 'CANBK', 'CDSL', 'CESC',
+    'CGPOWER', 'CHAMBLFERT', 'CHOLAFIN', 'CIPLA', 'COALINDIA', 'COFORGE', 'COLPAL', 'CONCOR', 'CROMPTON',
+    'CUMMINSIND', 'CYIENT', 'DABUR', 'DALBHARAT', 'DEEPAKNTR', 'DELHIVERY', 'DIVISLAB', 'DIXON', 'DLF',
+    'DMART', 'DRREDDY', 'EICHERMOT', 'ESCORTS', 'EXIDEIND', 'FEDERALBNK', 'GAIL', 'GLENMARK', 'GMRAIRPORT',
+    'GODREJCP', 'GODREJPROP', 'GRANULES', 'GRASIM', 'HAL', 'HAVELLS', 'HCLTECH', 'HDFCAMC', 'HDFCBANK',
+    'HDFCLIFE', 'HEROMOTOCO', 'HFCL', 'HINDALCO', 'HINDCOPPER', 'HINDPETRO', 'HINDUNILVR', 'HINDZINC',
+    'HUDCO', 'ICICIBANK', 'ICICIGI', 'ICICIPRULI', 'IDEA', 'IDFCFIRSTB', 'IEX', 'IGL', 'IIFL', 'INDHOTEL',
+    'INDIANB', 'INDIGO', 'INDUSINDBK', 'INDUSTOWER', 'INFY', 'INOXWIND', 'IOC', 'IRB', 'IRCTC', 'IREDA',
+    'IRFC', 'ITC', 'JINDALSTEL', 'JIOFIN', 'JSL', 'JSWENERGY', 'JSWSTEEL', 'JUBLFOOD', 'KALYANKJIL', 'KEI',
+    'KOTAKBANK', 'KPITTECH', 'LAURUSLABS', 'LICHSGFIN', 'LICI', 'LODHA', 'LT', 'LTF', 'LTIM', 'LUPIN',
+    'M&M', 'M&MFIN', 'MANAPPURAM', 'MARICO', 'MARUTI', 'MAXHEALTH', 'MCX', 'MFSL', 'MGL', 'MOTHERSON',
+    'MPHASIS', 'MRF', 'MUTHOOTFIN', 'NATIONALUM', 'NAUKRI', 'NBCC', 'NCC', 'NESTLEIND', 'NHPC', 'NMDC',
+    'NTPC', 'NYKAA', 'OBEROIRLTY', 'OFSS', 'OIL', 'ONGC', 'PAGEIND', 'PATANJALI', 'PAYTM', 'PEL',
+    'PERSISTENT', 'PETRONET', 'PFC', 'PHOENIXLTD', 'PIDILITIND', 'PIIND', 'PNB', 'PNBHOUSING', 'POLICYBZR',
+    'POLYCAB', 'POONAWALLA', 'POWERGRID', 'PRESTIGE', 'RAMCOCEM', 'RBLBANK', 'RECLTD', 'RELIANCE', 'SAIL',
+    'SBICARD', 'SBILIFE', 'SBIN', 'SHREECEM', 'SHRIRAMFIN', 'SIEMENS', 'SJVN', 'SOLARINDS', 'SONACOMS',
+    'SRF', 'SUNPHARMA', 'SUPREMEIND', 'SYNGENE', 'TATACHEM', 'TATACOMM', 'TATACONSUM', 'TATAELXSI',
+    'TATAMOTORS', 'TATAPOWER', 'TATASTEEL', 'TATATECH', 'TCS', 'TECHM', 'TIINDIA', 'TITAGARH', 'TITAN',
+    'TORNTPHARM', 'TORNTPOWER', 'TRENT', 'TVSMOTOR', 'ULTRACEMCO', 'UNIONBANK', 'UNITDSPR', 'UPL', 'VBL',
+    'VEDL', 'VOLTAS', 'WIPRO', 'YESBANK', 'ZOMATO', 'ZYDUSLIFE'
+  ].map(sym => ({ value: sym, label: sym, type: 'symbol' }));
+
+  const allItems = [...indices, ...symbols];
+
+  // Filter items based on search text
+  const filteredItems = allItems.filter(item =>
+    item.label.toLowerCase().includes(searchText.toLowerCase())
+  );
+
+
+  // Handler for search input
+  const handleSearchChange = (event) => {
+    const value = event.target.value;
+    setSearchText(value);
+    setShowDropdown(value.length > 0);
   };
 
-  // Handler for selecting a symbol
-  const handleSymbolChange = (event) => {
-    setSelectedSymbol(event.target.value);
+  // Handler for selecting from dropdown
+  const handleDropdownItemClick = (item) => {
+    setSearchText(item.label);
+    setShowDropdown(false);
+    
+    if (item.type === 'index') {
+      setSelectedIndex(item.value);
+      setSelectedSymbol('');
+      setIsIndexSelected(true);
+    } else {
+      setSelectedSymbol(item.value);
+      setSelectedIndex('');
+      setIsIndexSelected(false);
+    }
   };
 
   // Handler for futures expiry date change
@@ -1234,270 +1296,153 @@ const [chartData, setChartData] = useState({
       {/* Indian Stock Market Tab */}
       {activeTab === 'indian-stocks' && (
         <div>
-          <div>
-            <label htmlFor="Select">
-              Select Index:
-              <select value={selectedIndex} onChange={handleIndex}>
-                <option value="">---Select---</option>
-                <option value="NIFTY">NIFTY</option>
-                <option value="BANKNIFTY">BANKNIFTY</option>
-                <option value="FINNIFTY">FINNIFTY</option>
-                <option value="MIDCPNIFTY">MID CAP NIFTY</option>
-                <option value="NIFTYNXT50">NIFTY NEXT FIFTY</option>
-              </select>
+          {/* Search with Autocomplete Dropdown */}
+          <div style={{ marginBottom: '20px', position: 'relative' }}>
+            <label htmlFor="search-input" style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold' }}>
+              Search Symbol or Index:
             </label>
+            <input
+              id="search-input"
+              type="text"
+              value={searchText}
+              onChange={handleSearchChange}
+              onFocus={() => searchText.length > 0 && setShowDropdown(true)}
+              placeholder="Type to search index or symbol..."
+              style={{
+                width: '100%',
+                maxWidth: '400px',
+                padding: '10px 12px',
+                fontSize: '14px',
+                border: '2px solid #007bff',
+                borderRadius: '6px',
+                outline: 'none'
+              }}
+            />
+            
+            {/* Autocomplete Dropdown */}
+            {showDropdown && filteredItems.length > 0 && (
+              <div style={{
+                position: 'absolute',
+                top: '100%',
+                left: 0,
+                width: '100%',
+                maxWidth: '400px',
+                maxHeight: '300px',
+                overflowY: 'auto',
+                backgroundColor: 'white',
+                border: '1px solid #ccc',
+                borderRadius: '4px',
+                boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
+                zIndex: 1000,
+                marginTop: '4px'
+              }}>
+                {filteredItems.map((item, index) => (
+                  <div
+                    key={index}
+                    onClick={() => handleDropdownItemClick(item)}
+                    style={{
+                      padding: '10px 12px',
+                      cursor: 'pointer',
+                      borderBottom: index < filteredItems.length - 1 ? '1px solid #f0f0f0' : 'none',
+                      transition: 'background-color 0.2s'
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f0f8ff'}
+                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
+                  >
+                    <span style={{ fontWeight: '500' }}>{item.label}</span>
+                    <span style={{
+                      marginLeft: '8px',
+                      fontSize: '12px',
+                      color: item.type === 'index' ? '#007bff' : '#28a745',
+                      backgroundColor: item.type === 'index' ? '#e7f3ff' : '#d4edda',
+                      padding: '2px 8px',
+                      borderRadius: '12px'
+                    }}>
+                      {item.type === 'index' ? 'Index' : 'Stock'}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+            
+            {/* No results message */}
+            {showDropdown && searchText.length > 0 && filteredItems.length === 0 && (
+              <div style={{
+                position: 'absolute',
+                top: '100%',
+                left: 0,
+                width: '100%',
+                maxWidth: '400px',
+                backgroundColor: 'white',
+                border: '1px solid #ccc',
+                borderRadius: '4px',
+                boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
+                zIndex: 1000,
+                marginTop: '4px',
+                padding: '10px 12px',
+                color: '#666'
+              }}>
+                No matching symbols or indices found
+              </div>
+            )}
           </div>
-      <div>
-        <label htmlFor="expiry-date">Select Expiry Date:</label>
-        <select id="expiry-date" value={selectedExpiry} onChange={handleExpiryChange}>
-          <option value="">-- Select --</option>
-          {expiryDates.map((date, index) => (
-            <option key={index} value={date}>
-              {date}
-            </option>
-          ))}
-        </select>
-      </div>
-      <div className="custom_select">
-        <label htmlFor="select_symbol">Select Symbol:</label>
-        <select id="select_symbol" value={selectedSymbol} onChange={handleSymbolChange}>
-          <option value="">Select</option>
-          <option value="AARTIIND">AARTIIND</option>
-          <option value="ABB">ABB</option>
-          <option value="ABCAPITAL">ABCAPITAL</option>
-          <option value="ABFRL">ABFRL</option>
-          <option value="ACC">ACC</option>
-          <option value="ADANIENSOL">ADANIENSOL</option>
-          <option value="ADANIENT">ADANIENT</option>
-          <option value="ADANIGREEN">ADANIGREEN</option>
-          <option value="ADANIPORTS">ADANIPORTS</option>
-          <option value="ALKEM">ALKEM</option>
-          <option value="AMBUJACEM">AMBUJACEM</option>
-          <option value="ANGELONE">ANGELONE</option>
-          <option value="APLAPOLLO">APLAPOLLO</option>
-          <option value="APOLLOHOSP">APOLLOHOSP</option>
-          <option value="APOLLOTYRE">APOLLOTYRE</option>
-          <option value="ASHOKLEY">ASHOKLEY</option>
-          <option value="ASIANPAINT">ASIANPAINT</option>
-          <option value="ASTRAL">ASTRAL</option>
-          <option value="ATGL">ATGL</option>
-          <option value="AUBANK">AUBANK</option>
-          <option value="AUROPHARMA">AUROPHARMA</option>
-          <option value="AXISBANK">AXISBANK</option>
-          <option value="BAJAJ-AUTO">BAJAJ-AUTO</option>
-          <option value="BAJAJFINSV">BAJAJFINSV</option>
-          <option value="BAJFINANCE">BAJFINANCE</option>
-          <option value="BALKRISIND">BALKRISIND</option>
-          <option value="BANDHANBNK">BANDHANBNK</option>
-          <option value="BANKBARODA">BANKBARODA</option>
-          <option value="BANKINDIA">BANKINDIA</option>
-          <option value="BEL">BEL</option>
-          <option value="BERGEPAINT">BERGEPAINT</option>
-          <option value="BHARATFORG">BHARATFORG</option>
-          <option value="BHARTIARTL">BHARTIARTL</option>
-          <option value="BHEL">BHEL</option>
-          <option value="BIOCON">BIOCON</option>
-          <option value="BOSCHLTD">BOSCHLTD</option>
-          <option value="BPCL">BPCL</option>
-          <option value="BRITANNIA">BRITANNIA</option>
-          <option value="BSE">BSE</option>
-          <option value="BSOFT">BSOFT</option>
-          <option value="CAMS">CAMS</option>
-          <option value="CANBK">CANBK</option>
-          <option value="CDSL">CDSL</option>
-          <option value="CESC">CESC</option>
-          <option value="CGPOWER">CGPOWER</option>
-          <option value="CHAMBLFERT">CHAMBLFERT</option>
-          <option value="CHOLAFIN">CHOLAFIN</option>
-          <option value="CIPLA">CIPLA</option>
-          <option value="COALINDIA">COALINDIA</option>
-          <option value="COFORGE">COFORGE</option>
-          <option value="COLPAL">COLPAL</option>
-          <option value="CONCOR">CONCOR</option>
-          <option value="CROMPTON">CROMPTON</option>
-          <option value="CUMMINSIND">CUMMINSIND</option>
-          <option value="CYIENT">CYIENT</option>
-          <option value="DABUR">DABUR</option>
-          <option value="DALBHARAT">DALBHARAT</option>
-          <option value="DEEPAKNTR">DEEPAKNTR</option>
-          <option value="DELHIVERY">DELHIVERY</option>
-          <option value="DIVISLAB">DIVISLAB</option>
-          <option value="DIXON">DIXON</option>
-          <option value="DLF">DLF</option>
-          <option value="DMART">DMART</option>
-          <option value="DRREDDY">DRREDDY</option>
-          <option value="EICHERMOT">EICHERMOT</option>
-          <option value="ESCORTS">ESCORTS</option>
-          <option value="EXIDEIND">EXIDEIND</option>
-          <option value="FEDERALBNK">FEDERALBNK</option>
-          <option value="GAIL">GAIL</option>
-          <option value="GLENMARK">GLENMARK</option>
-          <option value="GMRAIRPORT">GMRAIRPORT</option>
-          <option value="GODREJCP">GODREJCP</option>
-          <option value="GODREJPROP">GODREJPROP</option>
-          <option value="GRANULES">GRANULES</option>
-          <option value="GRASIM">GRASIM</option>
-          <option value="HAL">HAL</option>
-          <option value="HAVELLS">HAVELLS</option>
-          <option value="HCLTECH">HCLTECH</option>
-          <option value="HDFCAMC">HDFCAMC</option>
-          <option value="HDFCBANK">HDFCBANK</option>
-          <option value="HDFCLIFE">HDFCLIFE</option>
-          <option value="HEROMOTOCO">HEROMOTOCO</option>
-          <option value="HFCL">HFCL</option>
-          <option value="HINDALCO">HINDALCO</option>
-          <option value="HINDCOPPER">HINDCOPPER</option>
-          <option value="HINDPETRO">HINDPETRO</option>
-          <option value="HINDUNILVR">HINDUNILVR</option>
-          <option value="HINDZINC">HINDZINC</option>
-          <option value="HUDCO">HUDCO</option>
-          <option value="ICICIBANK">ICICIBANK</option>
-          <option value="ICICIGI">ICICIGI</option>
-          <option value="ICICIPRULI">ICICIPRULI</option>
-          <option value="IDEA">IDEA</option>
-          <option value="IDFCFIRSTB">IDFCFIRSTB</option>
-          <option value="IEX">IEX</option>
-          <option value="IGL">IGL</option>
-          <option value="IIFL">IIFL</option>
-          <option value="INDHOTEL">INDHOTEL</option>
-          <option value="INDIANB">INDIANB</option>
-          <option value="INDIGO">INDIGO</option>
-          <option value="INDUSINDBK">INDUSINDBK</option>
-          <option value="INDUSTOWER">INDUSTOWER</option>
-          <option value="INFY">INFY</option>
-          <option value="INOXWIND">INOXWIND</option>
-          <option value="IOC">IOC</option>
-          <option value="IRB">IRB</option>
-          <option value="IRCTC">IRCTC</option>
-          <option value="IREDA">IREDA</option>
-          <option value="IRFC">IRFC</option>
-          <option value="ITC">ITC</option>
-          <option value="JINDALSTEL">JINDALSTEL</option>
-          <option value="JIOFIN">JIOFIN</option>
-          <option value="JSL">JSL</option>
-          <option value="JSWENERGY">JSWENERGY</option>
-          <option value="JSWSTEEL">JSWSTEEL</option>
-          <option value="JUBLFOOD">JUBLFOOD</option>
-          <option value="KALYANKJIL">KALYANKJIL</option>
-          <option value="KEI">KEI</option>
-          <option value="KOTAKBANK">KOTAKBANK</option>
-          <option value="KPITTECH">KPITTECH</option>
-          <option value="LAURUSLABS">LAURUSLABS</option>
-          <option value="LICHSGFIN">LICHSGFIN</option>
-          <option value="LICI">LICI</option>
-          <option value="LODHA">LODHA</option>
-          <option value="LT">LT</option>
-          <option value="LTF">LTF</option>
-          <option value="LTIM">LTIM</option>
-          <option value="LUPIN">LUPIN</option>
-          <option value="M&M">M&M</option>
-          <option value="M&MFIN">M&MFIN</option>
-          <option value="MANAPPURAM">MANAPPURAM</option>
-          <option value="MARICO">MARICO</option>
-          <option value="MARUTI">MARUTI</option>
-          <option value="MAXHEALTH">MAXHEALTH</option>
-          <option value="MCX">MCX</option>
-          <option value="MFSL">MFSL</option>
-          <option value="MGL">MGL</option>
-          <option value="MOTHERSON">MOTHERSON</option>
-          <option value="MPHASIS">MPHASIS</option>
-          <option value="MRF">MRF</option>
-          <option value="MUTHOOTFIN">MUTHOOTFIN</option>
-          <option value="NATIONALUM">NATIONALUM</option>
-          <option value="NAUKRI">NAUKRI</option>
-          <option value="NBCC">NBCC</option>
-          <option value="NCC">NCC</option>
-          <option value="NESTLEIND">NESTLEIND</option>
-          <option value="NHPC">NHPC</option>
-          <option value="NMDC">NMDC</option>
-          <option value="NTPC">NTPC</option>
-          <option value="NYKAA">NYKAA</option>
-          <option value="OBEROIRLTY">OBEROIRLTY</option>
-          <option value="OFSS">OFSS</option>
-          <option value="OIL">OIL</option>
-          <option value="ONGC">ONGC</option>
-          <option value="PAGEIND">PAGEIND</option>
-          <option value="PATANJALI">PATANJALI</option>
-          <option value="PAYTM">PAYTM</option>
-          <option value="PEL">PEL</option>
-          <option value="PERSISTENT">PERSISTENT</option>
-          <option value="PETRONET">PETRONET</option>
-          <option value="PFC">PFC</option>
-          <option value="PHOENIXLTD">PHOENIXLTD</option>
-<option value="PIDILITIND">PIDILITIND</option>
-          <option value="PIIND">PIIND</option>
-          <option value="PNB">PNB</option>
-          <option value="PNBHOUSING">PNBHOUSING</option>
-          <option value="POLICYBZR">POLICYBZR</option>
-          <option value="POLYCAB">POLYCAB</option>
-          <option value="POONAWALLA">POONAWALLA</option>
-          <option value="POWERGRID">POWERGRID</option>
-          <option value="PRESTIGE">PRESTIGE</option>
-          <option value="RAMCOCEM">RAMCOCEM</option>
-          <option value="RBLBANK">RBLBANK</option>
-          <option value="RECLTD">RECLTD</option>
-          <option value="RELIANCE">RELIANCE</option>
-          <option value="SAIL">SAIL</option>
-          <option value="SBICARD">SBICARD</option>
-          <option value="SBILIFE">SBILIFE</option>
-          <option value="SBIN">SBIN</option>
-          <option value="SHREECEM">SHREECEM</option>
-          <option value="SHRIRAMFIN">SHRIRAMFIN</option>
-          <option value="SIEMENS">SIEMENS</option>
-          <option value="SJVN">SJVN</option>
-          <option value="SOLARINDS">SOLARINDS</option>
-          <option value="SONACOMS">SONACOMS</option>
-          <option value="SRF">SRF</option>
-          <option value="SUNPHARMA">SUNPHARMA</option>
-          <option value="SUPREMEIND">SUPREMEIND</option>
-          <option value="SYNGENE">SYNGENE</option>
-          <option value="TATACHEM">TATACHEM</option>
-          <option value="TATACOMM">TATACOMM</option>
-          <option value="TATACONSUM">TATACONSUM</option>
-          <option value="TATAELXSI">TATAELXSI</option>
-          <option value="TATAMOTORS">TATAMOTORS</option>
-          <option value="TATAPOWER">TATAPOWER</option>
-          <option value="TATASTEEL">TATASTEEL</option>
-          <option value="TATATECH">TATATECH</option>
-          <option value="TCS">TCS</option>
-          <option value="TECHM">TECHM</option>
-          <option value="TIINDIA">TIINDIA</option>
-          <option value="TITAGARH">TITAGARH</option>
-          <option value="TITAN">TITAN</option>
-          <option value="TORNTPHARM">TORNTPHARM</option>
-          <option value="TORNTPOWER">TORNTPOWER</option>
-          <option value="TRENT">TRENT</option>
-          <option value="TVSMOTOR">TVSMOTOR</option>
-          <option value="ULTRACEMCO">ULTRACEMCO</option>
-          <option value="UNIONBANK">UNIONBANK</option>
-          <option value="UNITDSPR">UNITDSPR</option>
-          <option value="UPL">UPL</option>
-          <option value="VBL">VBL</option>
-          <option value="VEDL">VEDL</option>
-          <option value="VOLTAS">VOLTAS</option>
-          <option value="WIPRO">WIPRO</option>
-          <option value="YESBANK">YESBANK</option>
-          <option value="ZOMATO">ZOMATO</option>
-          <option value="ZYDUSLIFE">ZYDUSLIFE</option>
-        </select>
-      </div>
-      {futuresData && Array.isArray(futuresData.records?.expiryDates) && (
-        <div>
-          <label htmlFor="futures-expiry-date">Select Futures Expiry Date:</label>
-          <select
-            id="futures-expiry-date"
-            value={selectedFuturesExpiry}
-            onChange={handleFuturesExpiryChange}
-          >
-            <option value="">-- Select --</option>
-            {futuresData.records.expiryDates.map((date, index) => (
-              <option key={index} value={date}>
-                {date}
-              </option>
-            ))}
-          </select>
-        </div>
-      )}
+
+          {/* Expiry Date Selection - Shows for both Index (Options) and Symbol (Futures) */}
+          {selectedIndex && data.records && (
+            <div style={{ marginBottom: '20px' }}>
+              <label htmlFor="expiry-date" style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold' }}>
+                Select Expiry Date:
+              </label>
+              <select 
+                id="expiry-date" 
+                value={selectedExpiry} 
+                onChange={handleExpiryChange}
+                style={{
+                  width: '100%',
+                  maxWidth: '400px',
+                  padding: '8px 12px',
+                  fontSize: '14px',
+                  border: '1px solid #ccc',
+                  borderRadius: '4px'
+                }}
+              >
+                <option value="">-- Select --</option>
+                {expiryDates.map((date, index) => (
+                  <option key={index} value={date}>
+                    {date}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {selectedSymbol && futuresData && Array.isArray(futuresData.records?.expiryDates) && (
+            <div style={{ marginBottom: '20px' }}>
+              <label htmlFor="futures-expiry-date" style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold' }}>
+                Select Futures Expiry Date:
+              </label>
+              <select
+                id="futures-expiry-date"
+                value={selectedFuturesExpiry}
+                onChange={handleFuturesExpiryChange}
+                style={{
+                  width: '100%',
+                  maxWidth: '400px',
+                  padding: '8px 12px',
+                  fontSize: '14px',
+                  border: '1px solid #ccc',
+                  borderRadius: '4px'
+                }}
+              >
+                <option value="">-- Select --</option>
+                {futuresData.records.expiryDates.map((date, index) => (
+                  <option key={index} value={date}>
+                    {date}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
       <div style={{ marginTop: "20px" }}>
         <h3>PCR: {pcr}</h3>
