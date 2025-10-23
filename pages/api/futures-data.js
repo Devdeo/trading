@@ -1,12 +1,18 @@
 import axios from 'axios';
 
-let cache = { data: null, timestamp: null };
+// Simple in-memory cache
+let cache = {
+  data: null,
+  timestamp: null
+};
 
+// Rate limiting
 const RATE_LIMIT_WINDOW = 60000; // 1 minute
-const MAX_REQUESTS = 30;         // 30 requests per minute
+const MAX_REQUESTS = 30; // 30 requests per minute
 let requestCount = 0;
 let windowStart = Date.now();
 
+// Enhanced headers to mimic real browser behavior
 const getBrowserHeaders = () => ({
   'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
   'Accept': 'application/json, text/plain, */*',
@@ -23,56 +29,14 @@ const getBrowserHeaders = () => ({
   'Referer': 'https://www.nseindia.com/option-chain'
 });
 
-const axiosInstance = axios.create({
-  timeout: 10000,
-  maxRedirects: 5,
-  headers: getBrowserHeaders()
-});
-
-// infinite retry until cookies received
-async function getSessionCookiesUntilSuccess(delay = 2000) {
-  while (true) {
-    try {
-      const resp = await axiosInstance.get('https://www.nseindia.com', {
-        headers: {
-          ...getBrowserHeaders(),
-          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8'
-        }
-      });
-      if (resp.headers['set-cookie']) {
-        console.log('Got cookies!');
-        return resp.headers['set-cookie']
-          .map(c => c.split(';')[0])
-          .join('; ');
-      } else {
-        console.log('No cookies in response, retrying…');
-      }
-    } catch (err) {
-      console.log('Cookie fetch error, retrying…', err.message);
-    }
-    await new Promise(r => setTimeout(r, delay)); // wait before next try
-  }
-}
-
-async function fetchOptionChain(symbol, cookies) {
-  return await axiosInstance.get(
-    `https://www.nseindia.com/api/option-chain-equities?symbol=${symbol}`,
-    {
-      headers: {
-        ...getBrowserHeaders(),
-        'Cookie': cookies,
-        'X-Requested-With': 'XMLHttpRequest'
-      }
-    }
-  );
-}
-
 export default async function handler(req, res) {
+  // Rate limiting check
   const now = Date.now();
   if (now - windowStart > RATE_LIMIT_WINDOW) {
     requestCount = 0;
     windowStart = now;
   }
+  
   if (requestCount >= MAX_REQUESTS) {
     return res.status(429).json({ error: 'Too many requests. Please try again later.' });
   }
@@ -80,57 +44,85 @@ export default async function handler(req, res) {
 
   try {
     const { symbol } = req.query;
-    if (!symbol) return res.status(400).json({ error: 'Symbol is required' });
-
-    // cache check (30s)
+    
+    if (!symbol) {
+      return res.status(400).json({ error: 'Symbol is required' });
+    }
+    
+    // Check cache (valid for 30 seconds)
     if (cache.data && cache.timestamp && (now - cache.timestamp < 30000)) {
       return res.status(200).json(cache.data);
     }
 
-    // get cookies until success
-    let cookies = await getSessionCookiesUntilSuccess();
-    await new Promise(r => setTimeout(r, 1000)); // mimic human
+    // Create axios instance with default config
+    const axiosInstance = axios.create({
+      timeout: 10000,
+      maxRedirects: 5,
+      headers: getBrowserHeaders()
+    });
 
-    let response;
+    // First, establish session by visiting the main page
+    let sessionCookies = '';
     try {
-      response = await fetchOptionChain(symbol, cookies);
-    } catch (err) {
-      // retry once if blocked
-      if (err.response && [401, 403].includes(err.response.status)) {
-        console.log('API blocked first attempt, fetching cookies again…');
-        cookies = await getSessionCookiesUntilSuccess();
-        await new Promise(r => setTimeout(r, 1000));
-        response = await fetchOptionChain(symbol, cookies);
-      } else {
-        throw err;
+      const sessionResponse = await axiosInstance.get('https://www.nseindia.com', {
+        headers: {
+          ...getBrowserHeaders(),
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8'
+        }
+      });
+      
+      if (sessionResponse.headers['set-cookie']) {
+        sessionCookies = sessionResponse.headers['set-cookie']
+          .map(cookie => cookie.split(';')[0])
+          .join('; ');
       }
+    } catch (sessionError) {
+      console.log('Session establishment failed, proceeding without cookies');
     }
 
+    // Wait a moment to mimic human behavior
+    await new Promise(resolve => setTimeout(resolve, 1000));
+
+    // Now make the actual API request
+    const response = await axiosInstance.get(
+      `https://www.nseindia.com/api/option-chain-equities?symbol=${symbol}`, 
+      {
+        headers: {
+          ...getBrowserHeaders(),
+          'Cookie': sessionCookies,
+          'X-Requested-With': 'XMLHttpRequest'
+        }
+      }
+    );
+
+    // Update cache
     cache.data = response.data;
     cache.timestamp = now;
 
-    return res.status(200).json(response.data);
+    res.status(200).json(response.data);
   } catch (error) {
     console.error('NSE API error:', error.message);
-
-    if (cache.data && cache.timestamp && (now - cache.timestamp < 300000)) {
+    
+    // Return cached data if available during errors
+    if (cache.data && cache.timestamp && (now - cache.timestamp < 300000)) { // 5 minute fallback
       console.log('Returning cached data due to API error');
       return res.status(200).json(cache.data);
     }
-
+    
+    // More specific error handling
     if (error.response?.status === 401 || error.response?.status === 403) {
-      return res.status(503).json({
-        error: 'NSE API access temporarily blocked. Please try again later.'
+      res.status(503).json({ 
+        error: 'NSE API access temporarily blocked. This is a known issue with NSE servers blocking automated requests. Please try again later.' 
       });
     } else if (error.code === 'ECONNRESET' || error.code === 'ETIMEDOUT') {
-      return res.status(504).json({
-        error: 'NSE API connection timeout. The server may be experiencing high load.'
+      res.status(504).json({ 
+        error: 'NSE API connection timeout. The server may be experiencing high load.' 
       });
     } else {
-      return res.status(500).json({
-        error: 'Failed to fetch futures data from NSE API',
+      res.status(500).json({ 
+        error: 'Failed to fetch data from NSE API',
         details: process.env.NODE_ENV === 'development' ? error.message : undefined
       });
     }
   }
-}
+        }
