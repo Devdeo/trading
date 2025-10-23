@@ -2,8 +2,17 @@
 
 This is a financial data visualization application built with Next.js and TypeScript. The application focuses on displaying financial market data, particularly options chain analysis and stock market data visualization. It fetches real-time data from various financial APIs including NSE (National Stock Exchange) India and Yahoo Finance, presenting the information through interactive charts and dashboards.
 
-## Recent Changes (September 18, 2025)
+## Recent Changes
 
+### October 23, 2025
+Implemented autocomplete search functionality for index and symbol selection:
+- **Unified Search Interface**: Combined separate index and symbol dropdowns into a single search box
+- **Autocomplete Dropdown**: Real-time filtering that appears while typing, showing matching indices and symbols
+- **Visual Indicators**: Badge tags distinguish between "Index" (blue) and "Stock" (green) items
+- **Responsive Selection**: Clicking a suggestion automatically selects it and shows the appropriate expiry dropdown
+- **Code Cleanup**: Removed legacy handlers and state variables for cleaner, more maintainable code
+
+### September 18, 2025
 Added Apex candlestick chart functionality below the OI (Open Interest) chart:
 - **Candlestick Chart**: Real-time price data visualization using ApexCharts candlestick format
 - **Multiple Timeframes**: 5-minute, 15-minute, 30-minute, and 1-hour intervals
