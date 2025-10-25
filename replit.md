@@ -4,6 +4,16 @@ This is a financial data visualization application built with Next.js and TypeSc
 
 ## Recent Changes
 
+### October 25, 2025
+Migrated candlestick charts from ApexCharts to Lightweight Charts v5:
+- **Lightweight Charts v5**: Replaced ApexCharts with TradingView's Lightweight Charts v5 for superior performance and live candle making
+- **Live Candle Updates**: Implemented real-time candle updates with proper data validation and sorting
+- **Data Validation**: Added robust validation to handle malformed data, invalid timestamps, and missing values
+- **SSR Compatibility**: Properly configured dynamic imports to avoid SSR issues in Next.js
+- **Error Handling**: Implemented comprehensive error handling with try-catch blocks and data filtering
+- **Both Chart Types**: Updated both Indian stock market and cryptocurrency candlestick charts
+- **Component Reusability**: Created a reusable LightweightChart component in `components/` directory
+
 ### October 23, 2025
 Implemented autocomplete search functionality for index and symbol selection:
 - **Unified Search Interface**: Combined separate index and symbol dropdowns into a single search box
@@ -57,9 +67,10 @@ Preferred communication style: Simple, everyday language.
 - **Yahoo Finance2**: Alternative Yahoo Finance API for enhanced data access
 
 ## Charting & Visualization
-- **ApexCharts**: Advanced charting library for interactive financial charts
+- **Lightweight Charts**: TradingView's Lightweight Charts v5 for candlestick charts with live updates
+- **ApexCharts**: Advanced charting library for bar charts and other interactive visualizations
 - **Chart.js**: Flexible charting library for data visualization
-- **React Integration**: React wrappers for both charting libraries
+- **React Integration**: React wrappers and dynamic imports for chart libraries
 
 ## HTTP & Data Fetching
 - **Axios**: HTTP client for API requests with enhanced error handling
