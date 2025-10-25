@@ -5,6 +5,9 @@ import dynamic from 'next/dynamic';
 // Dynamically import ReactApexChart to avoid SSR issues
 const ReactApexChart = dynamic(() => import('react-apexcharts'), { ssr: false });
 
+// Dynamically import LightweightChart to avoid SSR issues
+const LightweightChart = dynamic(() => import('../components/LightweightChart'), { ssr: false });
+
 /**
  * Calculates the net effect based on changes in open interest for CE and PE options.
  * @param {Array} filteredStrikeRange - Array of option data for a specific strike range.
@@ -1770,15 +1773,12 @@ const [chartData, setChartData] = useState({
           />
         </div>
         
-        {/* Candlestick Chart - Enhanced TradingView Style */}
-        <div style={{ marginBottom: '30px', border: '1px solid #e0e0e0', borderRadius: '8px', padding: '10px' }}>
-          <ReactApexChart
-            options={candlestickData.options}
-            series={candlestickData.series}
-            type="candlestick"
-            height={500}
-          />
-        </div>
+        {/* Candlestick Chart - Lightweight Charts */}
+        <LightweightChart
+          data={candlestickData.series[0]?.data || []}
+          title={candlestickData.options.title?.text || 'Price Chart'}
+          currencySymbol="₹"
+        />
         
         {/* Volume Chart */}
         <div>
@@ -2064,14 +2064,11 @@ const [chartData, setChartData] = useState({
           )}
 
           {/* Crypto Chart */}
-          <div style={{ marginBottom: '30px', border: '1px solid #e0e0e0', borderRadius: '8px', padding: '10px' }}>
-            <ReactApexChart
-              options={cryptoData.options}
-              series={cryptoData.series}
-              type="candlestick"
-              height={500}
-            />
-          </div>
+          <LightweightChart
+            data={cryptoData.series[0]?.data || []}
+            title={cryptoData.options.title?.text || 'Crypto Price Chart'}
+            currencySymbol="$"
+          />
         </div>
       )}
 
