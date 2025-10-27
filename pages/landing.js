@@ -55,6 +55,11 @@ export default function Landing() {
   const [searchText, setSearchText] = useState('');
   const [isIndexSelected, setIsIndexSelected] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
+  
+  // Data update timestamps
+  const [oiDataLastUpdate, setOiDataLastUpdate] = useState(null);
+  const [candlestickDataLastUpdate, setCandlestickDataLastUpdate] = useState(null);
+  const [cryptoDataLastUpdate, setCryptoDataLastUpdate] = useState(null);
 
   // Crypto states
   const [selectedCrypto, setSelectedCrypto] = useState('BTCUSDT');
@@ -663,6 +668,7 @@ const [chartData, setChartData] = useState({
             }
           }
         }));
+        setCandlestickDataLastUpdate(new Date());
       } else {
         // Handle no data case
         setCandlestickData(prev => ({
@@ -865,6 +871,7 @@ const [chartData, setChartData] = useState({
           xaxis: { categories: filteredStrikeRange.map(option => option.strikePrice) },
         },
       }));
+      setOiDataLastUpdate(new Date());
 
       // Update volume chart
       setVolumeChartData((prev) => ({
@@ -965,6 +972,7 @@ const [chartData, setChartData] = useState({
           xaxis: { categories: filteredStrikeRange.map((item) => item.strikePrice) },
         },
       }));
+      setOiDataLastUpdate(new Date());
     }
   }, [filteredFuturesData, futuresData, strikeRange, isHorizontal]);
 
@@ -1063,6 +1071,7 @@ const [chartData, setChartData] = useState({
             }
           }
         }));
+        setCryptoDataLastUpdate(new Date());
         
         // Set current price from the latest data point
         const latestData = result.data[result.data.length - 1];
@@ -1299,162 +1308,154 @@ const [chartData, setChartData] = useState({
       {/* Indian Stock Market Tab */}
       {activeTab === 'indian-stocks' && (
         <div>
-          {/* Search with Autocomplete Dropdown */}
-          <div style={{ marginBottom: '20px', position: 'relative' }}>
-            <label htmlFor="search-input" style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold' }}>
-              Search Symbol or Index:
-            </label>
-            <input
-              id="search-input"
-              type="text"
-              value={searchText}
-              onChange={handleSearchChange}
-              onFocus={() => searchText.length > 0 && setShowDropdown(true)}
-              placeholder="Type to search index or symbol..."
-              style={{
-                width: '100%',
-                maxWidth: '400px',
-                padding: '10px 12px',
-                fontSize: '14px',
-                border: '2px solid #007bff',
-                borderRadius: '6px',
-                outline: 'none'
-              }}
-            />
-            
-            {/* Autocomplete Dropdown */}
-            {showDropdown && filteredItems.length > 0 && (
-              <div style={{
-                position: 'absolute',
-                top: '100%',
-                left: 0,
-                width: '100%',
-                maxWidth: '400px',
-                maxHeight: '300px',
-                overflowY: 'auto',
-                backgroundColor: 'white',
-                border: '1px solid #ccc',
-                borderRadius: '4px',
-                boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
-                zIndex: 1000,
-                marginTop: '4px'
-              }}>
-                {filteredItems.map((item, index) => (
-                  <div
-                    key={index}
-                    onClick={() => handleDropdownItemClick(item)}
-                    style={{
-                      padding: '10px 12px',
-                      cursor: 'pointer',
-                      borderBottom: index < filteredItems.length - 1 ? '1px solid #f0f0f0' : 'none',
-                      transition: 'background-color 0.2s'
-                    }}
-                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f0f8ff'}
-                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
-                  >
-                    <span style={{ fontWeight: '500' }}>{item.label}</span>
-                    <span style={{
-                      marginLeft: '8px',
-                      fontSize: '12px',
-                      color: item.type === 'index' ? '#007bff' : '#28a745',
-                      backgroundColor: item.type === 'index' ? '#e7f3ff' : '#d4edda',
-                      padding: '2px 8px',
-                      borderRadius: '12px'
-                    }}>
-                      {item.type === 'index' ? 'Index' : 'Stock'}
-                    </span>
-                  </div>
-                ))}
+          {/* Search and Expiry in One Line */}
+          <div style={{ marginBottom: '20px', display: 'flex', gap: '15px', alignItems: 'flex-start', flexWrap: 'wrap' }}>
+            {/* Search with Autocomplete Dropdown */}
+            <div style={{ flex: '1 1 300px', position: 'relative', minWidth: '250px' }}>
+              <label htmlFor="search-input" style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold' }}>
+                Search Symbol or Index:
+              </label>
+              <input
+                id="search-input"
+                type="text"
+                value={searchText}
+                onChange={handleSearchChange}
+                onFocus={() => searchText.length > 0 && setShowDropdown(true)}
+                placeholder="Type to search index or symbol..."
+                style={{
+                  width: '100%',
+                  padding: '10px 12px',
+                  fontSize: '14px',
+                  border: '2px solid #007bff',
+                  borderRadius: '6px',
+                  outline: 'none'
+                }}
+              />
+              
+              {/* Autocomplete Dropdown */}
+              {showDropdown && filteredItems.length > 0 && (
+                <div style={{
+                  position: 'absolute',
+                  top: '100%',
+                  left: 0,
+                  width: '100%',
+                  maxHeight: '300px',
+                  overflowY: 'auto',
+                  backgroundColor: 'white',
+                  border: '1px solid #ccc',
+                  borderRadius: '4px',
+                  boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
+                  zIndex: 1000,
+                  marginTop: '4px'
+                }}>
+                  {filteredItems.map((item, index) => (
+                    <div
+                      key={index}
+                      onClick={() => handleDropdownItemClick(item)}
+                      style={{
+                        padding: '10px 12px',
+                        cursor: 'pointer',
+                        borderBottom: index < filteredItems.length - 1 ? '1px solid #f0f0f0' : 'none',
+                        transition: 'background-color 0.2s'
+                      }}
+                      onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f0f8ff'}
+                      onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
+                    >
+                      <span style={{ fontWeight: '500' }}>{item.label}</span>
+                      <span style={{
+                        marginLeft: '8px',
+                        fontSize: '12px',
+                        color: item.type === 'index' ? '#007bff' : '#28a745',
+                        backgroundColor: item.type === 'index' ? '#e7f3ff' : '#d4edda',
+                        padding: '2px 8px',
+                        borderRadius: '12px'
+                      }}>
+                        {item.type === 'index' ? 'Index' : 'Stock'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              
+              {/* No results message */}
+              {showDropdown && searchText.length > 0 && filteredItems.length === 0 && (
+                <div style={{
+                  position: 'absolute',
+                  top: '100%',
+                  left: 0,
+                  width: '100%',
+                  backgroundColor: 'white',
+                  border: '1px solid #ccc',
+                  borderRadius: '4px',
+                  boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
+                  zIndex: 1000,
+                  marginTop: '4px',
+                  padding: '10px 12px',
+                  color: '#666'
+                }}>
+                  No matching symbols or indices found
+                </div>
+              )}
+            </div>
+
+            {/* Expiry Date Selection - Shows for both Index (Options) and Symbol (Futures) */}
+            {selectedIndex && data.records && (
+              <div style={{ flex: '1 1 300px', minWidth: '250px' }}>
+                <label htmlFor="expiry-date" style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold' }}>
+                  Select Expiry Date:
+                </label>
+                <select 
+                  id="expiry-date" 
+                  value={selectedExpiry} 
+                  onChange={handleExpiryChange}
+                  style={{
+                    width: '100%',
+                    padding: '8px 12px',
+                    fontSize: '14px',
+                    border: '1px solid #ccc',
+                    borderRadius: '4px'
+                  }}
+                >
+                  <option value="">-- Select --</option>
+                  {expiryDates.map((date, index) => (
+                    <option key={index} value={date}>
+                      {date}
+                    </option>
+                  ))}
+                </select>
               </div>
             )}
-            
-            {/* No results message */}
-            {showDropdown && searchText.length > 0 && filteredItems.length === 0 && (
-              <div style={{
-                position: 'absolute',
-                top: '100%',
-                left: 0,
-                width: '100%',
-                maxWidth: '400px',
-                backgroundColor: 'white',
-                border: '1px solid #ccc',
-                borderRadius: '4px',
-                boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
-                zIndex: 1000,
-                marginTop: '4px',
-                padding: '10px 12px',
-                color: '#666'
-              }}>
-                No matching symbols or indices found
+
+            {selectedSymbol && futuresData && Array.isArray(futuresData.records?.expiryDates) && (
+              <div style={{ flex: '1 1 300px', minWidth: '250px' }}>
+                <label htmlFor="futures-expiry-date" style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold' }}>
+                  Select Futures Expiry Date:
+                </label>
+                <select
+                  id="futures-expiry-date"
+                  value={selectedFuturesExpiry}
+                  onChange={handleFuturesExpiryChange}
+                  style={{
+                    width: '100%',
+                    padding: '8px 12px',
+                    fontSize: '14px',
+                    border: '1px solid #ccc',
+                    borderRadius: '4px'
+                  }}
+                >
+                  <option value="">-- Select --</option>
+                  {futuresData.records.expiryDates.map((date, index) => (
+                    <option key={index} value={date}>
+                      {date}
+                    </option>
+                  ))}
+                </select>
               </div>
             )}
           </div>
 
-          {/* Expiry Date Selection - Shows for both Index (Options) and Symbol (Futures) */}
-          {selectedIndex && data.records && (
-            <div style={{ marginBottom: '20px' }}>
-              <label htmlFor="expiry-date" style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold' }}>
-                Select Expiry Date:
-              </label>
-              <select 
-                id="expiry-date" 
-                value={selectedExpiry} 
-                onChange={handleExpiryChange}
-                style={{
-                  width: '100%',
-                  maxWidth: '400px',
-                  padding: '8px 12px',
-                  fontSize: '14px',
-                  border: '1px solid #ccc',
-                  borderRadius: '4px'
-                }}
-              >
-                <option value="">-- Select --</option>
-                {expiryDates.map((date, index) => (
-                  <option key={index} value={date}>
-                    {date}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-
-          {selectedSymbol && futuresData && Array.isArray(futuresData.records?.expiryDates) && (
-            <div style={{ marginBottom: '20px' }}>
-              <label htmlFor="futures-expiry-date" style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold' }}>
-                Select Futures Expiry Date:
-              </label>
-              <select
-                id="futures-expiry-date"
-                value={selectedFuturesExpiry}
-                onChange={handleFuturesExpiryChange}
-                style={{
-                  width: '100%',
-                  maxWidth: '400px',
-                  padding: '8px 12px',
-                  fontSize: '14px',
-                  border: '1px solid #ccc',
-                  borderRadius: '4px'
-                }}
-              >
-                <option value="">-- Select --</option>
-                {futuresData.records.expiryDates.map((date, index) => (
-                  <option key={index} value={date}>
-                    {date}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-
       <div style={{ marginTop: "20px" }}>
         <h3>PCR: {pcr}</h3>
-        {liveData?.netEffect !== undefined && (
-          <>
-            <h3>Net Effect: {liveData.netEffect.toLocaleString()}</h3>
-            <h3>Sentiment: {liveData.sentiment}</h3>
-          </>
-        )}
       </div>
 
       <div style={{ marginBottom: '20px', display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
@@ -1529,36 +1530,15 @@ const [chartData, setChartData] = useState({
         </div>
       </div>
 
-      {/* Net Effect and Sentiment Display */}
+      {/* PCR Display */}
       <div style={{ 
         display: 'flex', 
         justifyContent: 'center', 
-        gap: '20px', 
         margin: '20px 0',
         padding: '15px',
         backgroundColor: '#f5f5f5',
         borderRadius: '8px'
       }}>
-        <div style={{ textAlign: 'center' }}>
-          <strong>Current Strike Net Effect:</strong>
-          <div style={{ 
-            fontSize: '18px', 
-            color: liveData.netEffect > 0 ? '#28a745' : liveData.netEffect < 0 ? '#dc3545' : '#6c757d',
-            fontWeight: 'bold'
-          }}>
-            {liveData.netEffect?.toFixed(2) || 'N/A'}
-          </div>
-        </div>
-        <div style={{ textAlign: 'center' }}>
-          <strong>Current Strike Sentiment:</strong>
-          <div style={{ 
-            fontSize: '18px', 
-            color: liveData.sentiment === 'Bullish' ? '#28a745' : liveData.sentiment === 'Bearish' ? '#dc3545' : '#6c757d',
-            fontWeight: 'bold'
-          }}>
-            {liveData.sentiment || 'Neutral'}
-          </div>
-        </div>
         <div style={{ textAlign: 'center' }}>
           <strong>PCR:</strong>
           <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#007bff' }}>
@@ -1567,218 +1547,230 @@ const [chartData, setChartData] = useState({
         </div>
       </div>
 
-      {/* AI Analysis Display */}
-      <div style={{
-        margin: '20px 0',
-        padding: '20px',
-        backgroundColor: '#f8f9fa',
-        borderRadius: '10px',
-        border: '2px solid #e9ecef'
-      }}>
-        <h3 style={{ 
-          textAlign: 'center', 
-          marginBottom: '15px',
-          color: '#495057',
-          fontSize: '18px',
-          fontWeight: 'bold'
-        }}>
-          🤖 AI Market Analysis
-        </h3>
-        
-        {/* Manual AI Analysis Button */}
-        <div style={{ textAlign: 'center', marginBottom: '20px' }}>
-          <button
-            onClick={handleManualAIAnalysis}
-            disabled={aiAnalysis.loading}
-            style={{
-              backgroundColor: aiAnalysis.loading ? '#6c757d' : '#007bff',
-              color: 'white',
-              border: 'none',
-              padding: '12px 24px',
-              borderRadius: '8px',
-              fontSize: '16px',
-              fontWeight: 'bold',
-              cursor: aiAnalysis.loading ? 'not-allowed' : 'pointer',
-              transition: 'background-color 0.3s ease'
-            }}
-          >
-            {aiAnalysis.loading ? '🧠 Analyzing...' : '🔍 Analyze with AI'}
-          </button>
-        </div>
-        
-        {aiAnalysis.loading && (
-          <div style={{ textAlign: 'center', padding: '20px' }}>
-            <div style={{ fontSize: '16px', color: '#6c757d' }}>
-              🧠 Analyzing market data...
-            </div>
-          </div>
-        )}
-
-
-        {!aiAnalysis.loading && aiAnalysis.analysis && (
-          <div>
-            {/* Trend and Confidence */}
-            <div style={{
-              display: 'flex',
-              justifyContent: 'space-around',
-              marginBottom: '20px',
-              flexWrap: 'wrap',
-              gap: '10px'
-            }}>
-              <div style={{ 
-                textAlign: 'center',
-                backgroundColor: aiAnalysis.trend === 'BULLISH' ? '#d4edda' : 
-                               aiAnalysis.trend === 'BEARISH' ? '#f8d7da' : '#fff3cd',
-                padding: '10px',
-                borderRadius: '8px',
-                minWidth: '120px'
-              }}>
-                <strong>Trend</strong>
-                <div style={{ 
-                  fontSize: '16px', 
-                  fontWeight: 'bold',
-                  color: aiAnalysis.trend === 'BULLISH' ? '#155724' : 
-                         aiAnalysis.trend === 'BEARISH' ? '#721c24' : '#856404'
-                }}>
-                  {aiAnalysis.trend === 'BULLISH' ? '📈 BULLISH' : 
-                   aiAnalysis.trend === 'BEARISH' ? '📉 BEARISH' : 
-                   aiAnalysis.trend === 'VOLATILE' ? '⚡ VOLATILE' : '➡️ NEUTRAL'}
-                </div>
-              </div>
-              
-              <div style={{ textAlign: 'center', backgroundColor: '#e2e3e5', padding: '10px', borderRadius: '8px', minWidth: '120px' }}>
-                <strong>Confidence</strong>
-                <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#495057' }}>
-                  {aiAnalysis.confidence}%
-                </div>
-              </div>
-
-              <div style={{ textAlign: 'center', backgroundColor: '#cce5ff', padding: '10px', borderRadius: '8px', minWidth: '120px' }}>
-                <strong>Risk Level</strong>
-                <div style={{ 
-                  fontSize: '16px', 
-                  fontWeight: 'bold',
-                  color: aiAnalysis.riskLevel === 'HIGH' ? '#721c24' : 
-                         aiAnalysis.riskLevel === 'MEDIUM' ? '#856404' : '#155724'
-                }}>
-                  {aiAnalysis.riskLevel}
-                </div>
-              </div>
-            </div>
-
-            {/* Trading Levels */}
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
-              gap: '15px',
-              marginBottom: '20px'
-            }}>
-              <div style={{ textAlign: 'center', backgroundColor: '#d1ecf1', padding: '12px', borderRadius: '8px' }}>
-                <strong>Entry Level</strong>
-                <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#0c5460' }}>
-                  ₹{aiAnalysis.entryLevel?.toFixed(2) || 'N/A'}
-                </div>
-              </div>
-              
-              <div style={{ textAlign: 'center', backgroundColor: '#f8d7da', padding: '12px', borderRadius: '8px' }}>
-                <strong>Stop Loss</strong>
-                <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#721c24' }}>
-                  ₹{aiAnalysis.stopLoss?.toFixed(2) || 'N/A'}
-                </div>
-              </div>
-              
-              <div style={{ textAlign: 'center', backgroundColor: '#d4edda', padding: '12px', borderRadius: '8px' }}>
-                <strong>Target 1</strong>
-                <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#155724' }}>
-                  ₹{aiAnalysis.target1?.toFixed(2) || 'N/A'}
-                </div>
-              </div>
-              
-              {aiAnalysis.target2 && aiAnalysis.target2 > 0 && (
-                <div style={{ textAlign: 'center', backgroundColor: '#d4edda', padding: '12px', borderRadius: '8px' }}>
-                  <strong>Target 2</strong>
-                  <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#155724' }}>
-                    ₹{aiAnalysis.target2.toFixed(2)}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Strategy and Analysis */}
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: '1fr 1fr',
-              gap: '15px',
-              marginBottom: '15px'
-            }}>
-              {aiAnalysis.strategy && (
-                <div style={{ backgroundColor: '#fff3cd', padding: '12px', borderRadius: '8px' }}>
-                  <strong>Strategy:</strong>
-                  <div style={{ marginTop: '5px', fontSize: '14px' }}>
-                    {aiAnalysis.strategy}
-                  </div>
-                </div>
-              )}
-              
-              {aiAnalysis.riskReward && (
-                <div style={{ backgroundColor: '#e2e3e5', padding: '12px', borderRadius: '8px' }}>
-                  <strong>Risk:Reward Ratio:</strong>
-                  <div style={{ marginTop: '5px', fontSize: '16px', fontWeight: 'bold' }}>
-                    {aiAnalysis.riskReward}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Analysis Text */}
-            {aiAnalysis.analysis && (
-              <div style={{
-                backgroundColor: '#ffffff',
-                padding: '15px',
-                borderRadius: '8px',
-                border: '1px solid #dee2e6',
-                fontSize: '14px',
-                lineHeight: '1.5'
-              }}>
-                <strong>💡 Analysis:</strong>
-                <div style={{ marginTop: '8px' }}>
-                  {aiAnalysis.analysis}
-                </div>
-              </div>
-            )}
-
-            {/* Timestamp */}
-            {aiAnalysis.timestamp && (
-              <div style={{ 
-                textAlign: 'center', 
-                fontSize: '12px', 
-                color: '#6c757d',
-                marginTop: '15px'
-              }}>
-                Last Updated: {new Date(aiAnalysis.timestamp).toLocaleString()}
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-
       <div>
         {/* Open Interest Chart */}
-        <div style={{ marginBottom: '30px' }}>
+        <div style={{ marginBottom: '10px' }}>
           <ReactApexChart
             options={chartData.options}
             series={chartData.series}
             type="bar"
             height={Math.max(500, (strikeRange * 2 + 1) * 50 + 150)}
           />
+          {oiDataLastUpdate && (
+            <div style={{ textAlign: 'center', fontSize: '11px', color: '#6c757d', marginTop: '5px' }}>
+              Last OI Data Update: {new Date(oiDataLastUpdate).toLocaleString()}
+            </div>
+          )}
+        </div>
+
+        {/* AI Analysis Display */}
+        <div style={{
+          margin: '20px 0',
+          padding: '20px',
+          backgroundColor: '#f8f9fa',
+          borderRadius: '10px',
+          border: '2px solid #e9ecef'
+        }}>
+          <h3 style={{ 
+            textAlign: 'center', 
+            marginBottom: '15px',
+            color: '#495057',
+            fontSize: '18px',
+            fontWeight: 'bold'
+          }}>
+            🤖 AI Market Analysis
+          </h3>
+          
+          {/* Manual AI Analysis Button */}
+          <div style={{ textAlign: 'center', marginBottom: '20px' }}>
+            <button
+              onClick={handleManualAIAnalysis}
+              disabled={aiAnalysis.loading}
+              style={{
+                backgroundColor: aiAnalysis.loading ? '#6c757d' : '#007bff',
+                color: 'white',
+                border: 'none',
+                padding: '12px 24px',
+                borderRadius: '8px',
+                fontSize: '16px',
+                fontWeight: 'bold',
+                cursor: aiAnalysis.loading ? 'not-allowed' : 'pointer',
+                transition: 'background-color 0.3s ease'
+              }}
+            >
+              {aiAnalysis.loading ? '🧠 Analyzing...' : '🔍 Analyze with AI'}
+            </button>
+          </div>
+          
+          {aiAnalysis.loading && (
+            <div style={{ textAlign: 'center', padding: '20px' }}>
+              <div style={{ fontSize: '16px', color: '#6c757d' }}>
+                🧠 Analyzing market data...
+              </div>
+            </div>
+          )}
+
+
+          {!aiAnalysis.loading && aiAnalysis.analysis && (
+            <div>
+              {/* Trend and Confidence */}
+              <div style={{
+                display: 'flex',
+                justifyContent: 'space-around',
+                marginBottom: '20px',
+                flexWrap: 'wrap',
+                gap: '10px'
+              }}>
+                <div style={{ 
+                  textAlign: 'center',
+                  backgroundColor: aiAnalysis.trend === 'BULLISH' ? '#d4edda' : 
+                                 aiAnalysis.trend === 'BEARISH' ? '#f8d7da' : '#fff3cd',
+                  padding: '10px',
+                  borderRadius: '8px',
+                  minWidth: '120px'
+                }}>
+                  <strong>Trend</strong>
+                  <div style={{ 
+                    fontSize: '16px', 
+                    fontWeight: 'bold',
+                    color: aiAnalysis.trend === 'BULLISH' ? '#155724' : 
+                           aiAnalysis.trend === 'BEARISH' ? '#721c24' : '#856404'
+                  }}>
+                    {aiAnalysis.trend === 'BULLISH' ? '📈 BULLISH' : 
+                     aiAnalysis.trend === 'BEARISH' ? '📉 BEARISH' : 
+                     aiAnalysis.trend === 'VOLATILE' ? '⚡ VOLATILE' : '➡️ NEUTRAL'}
+                  </div>
+                </div>
+                
+                <div style={{ textAlign: 'center', backgroundColor: '#e2e3e5', padding: '10px', borderRadius: '8px', minWidth: '120px' }}>
+                  <strong>Confidence</strong>
+                  <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#495057' }}>
+                    {aiAnalysis.confidence}%
+                  </div>
+                </div>
+
+                <div style={{ textAlign: 'center', backgroundColor: '#cce5ff', padding: '10px', borderRadius: '8px', minWidth: '120px' }}>
+                  <strong>Risk Level</strong>
+                  <div style={{ 
+                    fontSize: '16px', 
+                    fontWeight: 'bold',
+                    color: aiAnalysis.riskLevel === 'HIGH' ? '#721c24' : 
+                           aiAnalysis.riskLevel === 'MEDIUM' ? '#856404' : '#155724'
+                  }}>
+                    {aiAnalysis.riskLevel}
+                  </div>
+                </div>
+              </div>
+
+              {/* Trading Levels */}
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
+                gap: '15px',
+                marginBottom: '20px'
+              }}>
+                <div style={{ textAlign: 'center', backgroundColor: '#d1ecf1', padding: '12px', borderRadius: '8px' }}>
+                  <strong>Entry Level</strong>
+                  <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#0c5460' }}>
+                    ₹{aiAnalysis.entryLevel?.toFixed(2) || 'N/A'}
+                  </div>
+                </div>
+                
+                <div style={{ textAlign: 'center', backgroundColor: '#f8d7da', padding: '12px', borderRadius: '8px' }}>
+                  <strong>Stop Loss</strong>
+                  <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#721c24' }}>
+                    ₹{aiAnalysis.stopLoss?.toFixed(2) || 'N/A'}
+                  </div>
+                </div>
+                
+                <div style={{ textAlign: 'center', backgroundColor: '#d4edda', padding: '12px', borderRadius: '8px' }}>
+                  <strong>Target 1</strong>
+                  <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#155724' }}>
+                    ₹{aiAnalysis.target1?.toFixed(2) || 'N/A'}
+                  </div>
+                </div>
+                
+                {aiAnalysis.target2 && aiAnalysis.target2 > 0 && (
+                  <div style={{ textAlign: 'center', backgroundColor: '#d4edda', padding: '12px', borderRadius: '8px' }}>
+                    <strong>Target 2</strong>
+                    <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#155724' }}>
+                      ₹{aiAnalysis.target2.toFixed(2)}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Strategy and Analysis */}
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: '1fr 1fr',
+                gap: '15px',
+                marginBottom: '15px'
+              }}>
+                {aiAnalysis.strategy && (
+                  <div style={{ backgroundColor: '#fff3cd', padding: '12px', borderRadius: '8px' }}>
+                    <strong>Strategy:</strong>
+                    <div style={{ marginTop: '5px', fontSize: '14px' }}>
+                      {aiAnalysis.strategy}
+                    </div>
+                  </div>
+                )}
+                
+                {aiAnalysis.riskReward && (
+                  <div style={{ backgroundColor: '#e2e3e5', padding: '12px', borderRadius: '8px' }}>
+                    <strong>Risk:Reward Ratio:</strong>
+                    <div style={{ marginTop: '5px', fontSize: '16px', fontWeight: 'bold' }}>
+                      {aiAnalysis.riskReward}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Analysis Text */}
+              {aiAnalysis.analysis && (
+                <div style={{
+                  backgroundColor: '#ffffff',
+                  padding: '15px',
+                  borderRadius: '8px',
+                  border: '1px solid #dee2e6',
+                  fontSize: '14px',
+                  lineHeight: '1.5'
+                }}>
+                  <strong>💡 Analysis:</strong>
+                  <div style={{ marginTop: '8px' }}>
+                    {aiAnalysis.analysis}
+                  </div>
+                </div>
+              )}
+
+              {/* Timestamp */}
+              {aiAnalysis.timestamp && (
+                <div style={{ 
+                  textAlign: 'center', 
+                  fontSize: '12px', 
+                  color: '#6c757d',
+                  marginTop: '15px'
+                }}>
+                  Last Updated: {new Date(aiAnalysis.timestamp).toLocaleString()}
+                </div>
+              )}
+            </div>
+          )}
         </div>
         
         {/* Candlestick Chart - Lightweight Charts */}
-        <LightweightChart
-          data={candlestickData.series[0]?.data || []}
-          title={candlestickData.options.title?.text || 'Price Chart'}
-          currencySymbol="₹"
-        />
+        <div style={{ marginBottom: '10px' }}>
+          <LightweightChart
+            data={candlestickData.series[0]?.data || []}
+            title={`${candlestickData.options.title?.text || 'Price Chart'} (${selectedTimeframe})`}
+            currencySymbol="₹"
+          />
+          {candlestickDataLastUpdate && (
+            <div style={{ textAlign: 'center', fontSize: '11px', color: '#6c757d', marginTop: '5px' }}>
+              Last Candlestick Data Update: {new Date(candlestickDataLastUpdate).toLocaleString()}
+            </div>
+          )}
+        </div>
         
         {/* Volume Chart */}
         <div>
@@ -2064,11 +2056,18 @@ const [chartData, setChartData] = useState({
           )}
 
           {/* Crypto Chart */}
-          <LightweightChart
-            data={cryptoData.series[0]?.data || []}
-            title={cryptoData.options.title?.text || 'Crypto Price Chart'}
-            currencySymbol="$"
-          />
+          <div style={{ marginBottom: '10px' }}>
+            <LightweightChart
+              data={cryptoData.series[0]?.data || []}
+              title={cryptoData.options.title?.text || 'Crypto Price Chart'}
+              currencySymbol="$"
+            />
+            {cryptoDataLastUpdate && (
+              <div style={{ textAlign: 'center', fontSize: '11px', color: '#6c757d', marginTop: '5px' }}>
+                Last Crypto Data Update: {new Date(cryptoDataLastUpdate).toLocaleString()}
+              </div>
+            )}
+          </div>
         </div>
       )}
 
