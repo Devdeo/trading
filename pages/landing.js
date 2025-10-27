@@ -1309,9 +1309,9 @@ const [chartData, setChartData] = useState({
       {activeTab === 'indian-stocks' && (
         <div>
           {/* Search and Expiry in One Line */}
-          <div style={{ marginBottom: '20px', display: 'flex', gap: '15px', alignItems: 'flex-start', flexWrap: 'wrap' }}>
+          <div style={{ marginBottom: '20px', display: 'flex', gap: '15px', alignItems: 'flex-start', flexWrap: 'nowrap' }}>
             {/* Search with Autocomplete Dropdown */}
-            <div style={{ flex: '1 1 300px', position: 'relative', minWidth: '250px' }}>
+            <div style={{ flex: '1', position: 'relative', minWidth: '200px' }}>
               <label htmlFor="search-input" style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold' }}>
                 Search Symbol or Index:
               </label>
@@ -1400,7 +1400,7 @@ const [chartData, setChartData] = useState({
 
             {/* Expiry Date Selection - Shows for both Index (Options) and Symbol (Futures) */}
             {selectedIndex && data.records && (
-              <div style={{ flex: '1 1 300px', minWidth: '250px' }}>
+              <div style={{ flex: '1', minWidth: '200px' }}>
                 <label htmlFor="expiry-date" style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold' }}>
                   Select Expiry Date:
                 </label>
@@ -1427,7 +1427,7 @@ const [chartData, setChartData] = useState({
             )}
 
             {selectedSymbol && futuresData && Array.isArray(futuresData.records?.expiryDates) && (
-              <div style={{ flex: '1 1 300px', minWidth: '250px' }}>
+              <div style={{ flex: '1', minWidth: '200px' }}>
                 <label htmlFor="futures-expiry-date" style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold' }}>
                   Select Futures Expiry Date:
                 </label>
