@@ -4,6 +4,15 @@ This is a financial data visualization application built with Next.js and TypeSc
 
 ## Recent Changes
 
+### November 14, 2025
+Added password-based authentication system and improved UI layout:
+- **Password Authentication**: Implemented secure password-based login system using environment variables
+- **Protected Routes**: All frontend pages and API endpoints are protected with authentication middleware
+- **Login Page**: Created clean login interface with password input and error handling
+- **Session Management**: Cookie-based session management with HttpOnly and SameSite security flags
+- **Timeframe Selector Relocation**: Moved candlestick chart timeframe selector from top controls to directly above the candlestick chart for better UX
+- **Security**: Base64 token authentication, server-side password verification, and protected API routes
+
 ### October 25, 2025
 Migrated candlestick charts from ApexCharts to Lightweight Charts v5:
 - **Lightweight Charts v5**: Replaced ApexCharts with TradingView's Lightweight Charts v5 for superior performance and live candle making

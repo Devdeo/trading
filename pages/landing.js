@@ -1505,29 +1505,6 @@ const [chartData, setChartData] = useState({
             +
           </button>
         </div>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', backgroundColor: '#e8f4f8', padding: '8px', borderRadius: '4px' }}>
-          <label htmlFor="timeframe-select" style={{ fontSize: '14px', fontWeight: 'bold' }}>
-            Timeframe:
-          </label>
-          <select 
-            id="timeframe-select" 
-            value={selectedTimeframe} 
-            onChange={handleTimeframeChange}
-            style={{
-              padding: '4px 8px',
-              borderRadius: '4px',
-              border: '1px solid #ccc',
-              fontSize: '14px',
-              backgroundColor: 'white'
-            }}
-          >
-            <option value="5m">5 Minutes</option>
-            <option value="15m">15 Minutes</option>
-            <option value="30m">30 Minutes</option>
-            <option value="1h">1 Hour</option>
-          </select>
-        </div>
       </div>
 
       {/* PCR Display */}
@@ -1760,6 +1737,30 @@ const [chartData, setChartData] = useState({
         
         {/* Candlestick Chart - Lightweight Charts */}
         <div style={{ marginBottom: '10px' }}>
+          {/* Timeframe Selector for Candlestick Chart */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', backgroundColor: '#e8f4f8', padding: '8px', borderRadius: '4px', marginBottom: '10px' }}>
+            <label htmlFor="timeframe-select" style={{ fontSize: '14px', fontWeight: 'bold' }}>
+              Candlestick Timeframe:
+            </label>
+            <select 
+              id="timeframe-select" 
+              value={selectedTimeframe} 
+              onChange={handleTimeframeChange}
+              style={{
+                padding: '4px 8px',
+                borderRadius: '4px',
+                border: '1px solid #ccc',
+                fontSize: '14px',
+                backgroundColor: 'white'
+              }}
+            >
+              <option value="5m">5 Minutes</option>
+              <option value="15m">15 Minutes</option>
+              <option value="30m">30 Minutes</option>
+              <option value="1h">1 Hour</option>
+            </select>
+          </div>
+          
           <LightweightChart
             data={candlestickData.series[0]?.data || []}
             title={`${candlestickData.options.title?.text || 'Price Chart'} (${selectedTimeframe})`}
