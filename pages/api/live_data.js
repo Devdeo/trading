@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { withAuth } from '../../lib/authMiddleware';
 
 // Simple in-memory cache
 let cache = {
@@ -29,7 +30,7 @@ const getBrowserHeaders = () => ({
   'Referer': 'https://www.nseindia.com/option-chain'
 });
 
-export default async function handler(req, res) {
+async function handler(req, res) {
   // Rate limiting check
   const now = Date.now();
   if (now - windowStart > RATE_LIMIT_WINDOW) {
@@ -126,3 +127,5 @@ export default async function handler(req, res) {
     }
   }
 }
+
+export default withAuth(handler);

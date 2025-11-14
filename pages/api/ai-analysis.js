@@ -1,4 +1,5 @@
 import { GoogleGenAI } from "@google/genai";
+import { withAuth } from '../../lib/authMiddleware';
 
 // Initialize Gemini AI
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
@@ -6,7 +7,7 @@ const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 // Simple in-memory cache for AI analysis
 let cache = new Map();
 
-export default async function handler(req, res) {
+async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
@@ -272,3 +273,5 @@ Consider:
 
 Provide actionable insights based on current market conditions and data patterns.`;
 }
+
+export default withAuth(handler);

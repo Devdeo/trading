@@ -1,5 +1,10 @@
 /** @type {import('next').NextConfig} */
+const path = require('path')
+
 const nextConfig = {
+  turbopack: {
+    root: __dirname,
+  },
   // Configure for Replit environment
   async headers() {
     return [

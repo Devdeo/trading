@@ -1,9 +1,10 @@
 import axios from 'axios';
+import { withAuth } from '../../lib/authMiddleware';
 
 // Simple in-memory cache for candlestick data
 let cache = new Map();
 
-export default async function handler(req, res) {
+async function handler(req, res) {
   try {
     const { symbol, interval = '5m', range = '5d', isIndex = 'false' } = req.query;
     
@@ -121,3 +122,5 @@ export default async function handler(req, res) {
     }
   }
 }
+
+export default withAuth(handler);

@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { withAuth } from '../../lib/authMiddleware';
 
 // Simple in-memory cache
 let cache = {
@@ -14,7 +15,7 @@ const MAX_REQUESTS = 30; // 30 requests per minute
 let requestCount = 0;
 let windowStart = Date.now();
 
-export default async function handler(req, res) {
+async function handler(req, res) {
   const now = Date.now();
   if (now - windowStart > RATE_LIMIT_WINDOW) {
     requestCount = 0;
@@ -153,3 +154,5 @@ export default async function handler(req, res) {
     }
   }
 }
+
+export default withAuth(handler);
