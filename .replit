@@ -20,18 +20,6 @@ localPort = 3000
 localPort = 5000
 externalPort = 80
 
-[[ports]]
-localPort = 38375
-externalPort = 3000
-
-[[ports]]
-localPort = 43593
-externalPort = 3001
-
-[[ports]]
-localPort = 45863
-externalPort = 3002
-
 [workflows]
 runButton = "Project"
 
@@ -59,3 +47,4 @@ waitForPort = 5000
 [agent]
 expertMode = true
 integrations = ["javascript_gemini:1.0.0"]
+stack = "BEST_EFFORT_FALLBACK"

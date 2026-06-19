@@ -1,33 +1,17 @@
 import { withAuth } from '../../lib/authMiddleware';
 import { nseGet } from '../../lib/nseSession';
 
-const RATE_LIMIT_WINDOW = 60000;
-const MAX_REQUESTS = 30;
-let requestCount = 0;
-let windowStart = Date.now();
-
-const CACHE_TTL = 30 * 1000;
-const FALLBACK_TTL = 5 * 60 * 1000;
+const CACHE_TTL = 60 * 1000;
 const cache = new Map();
 
 async function handler(req, res) {
-  const now = Date.now();
-
-  if (now - windowStart > RATE_LIMIT_WINDOW) {
-    requestCount = 0;
-    windowStart = now;
-  }
-  if (requestCount >= MAX_REQUESTS) {
-    return res.status(429).json({ error: 'Too many requests. Please try again later.' });
-  }
-  requestCount++;
-
   const { symbol } = req.query;
 
   if (!symbol) {
-    return res.status(400).json({ error: 'Symbol is required' });
+    return res.status(400).json({ error: 'symbol query param is required' });
   }
 
+  const now = Date.now();
   const cached = cache.get(symbol);
   if (cached && now - cached.timestamp < CACHE_TTL) {
     return res.status(200).json(cached.data);
@@ -35,17 +19,17 @@ async function handler(req, res) {
 
   try {
     const response = await nseGet(
-      `https://www.nseindia.com/api/quote-equity?symbol=${encodeURIComponent(symbol)}`,
-      'https://www.nseindia.com/get-quotes/equity?symbol=' + encodeURIComponent(symbol)
+      `https://www.nseindia.com/api/option-chain-contract-info?symbol=${encodeURIComponent(symbol)}`,
+      'https://www.nseindia.com/option-chain'
     );
 
     cache.set(symbol, { data: response.data, timestamp: now });
 
     return res.status(200).json(response.data);
   } catch (error) {
-    console.error('NSE live_data error:', error.message);
+    console.error('NSE option-chain-contract-info error:', error.message);
 
-    if (cached && now - cached.timestamp < FALLBACK_TTL) {
+    if (cached) {
       return res.status(200).json(cached.data);
     }
 
@@ -56,7 +40,7 @@ async function handler(req, res) {
     if (error.code === 'ECONNRESET' || error.code === 'ETIMEDOUT') {
       return res.status(504).json({ error: 'NSE API connection timeout.' });
     }
-    return res.status(500).json({ error: 'Failed to fetch live data from NSE.', details: process.env.NODE_ENV === 'development' ? error.message : undefined });
+    return res.status(500).json({ error: 'Failed to fetch option-chain-contract-info from NSE.' });
   }
 }
 
