@@ -42,7 +42,7 @@ async function handler(req, res) {
     } else if (type === 'Equity' || (!type && !['NIFTY', 'BANKNIFTY', 'FINNIFTY', 'MIDCPNIFTY', 'NIFTYNXT50'].includes(symbol.toUpperCase()))) {
       url = `https://www.nseindia.com/api/option-chain-v3?type=Equity&symbol=${encodeURIComponent(symbol)}`;
     } else {
-      url = `https://www.nseindia.com/api/option-chain-v3?type=Index&symbol=${encodeURIComponent(symbol)}`;
+      url = `https://www.nseindia.com/api/option-chain-v3?type=Indices&symbol=${encodeURIComponent(symbol)}`;
     }
 
     const response = await nseGet(url, 'https://www.nseindia.com/option-chain');

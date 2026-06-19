@@ -3,7 +3,7 @@ import * as cookie from 'cookie';
 export default function handler(req, res) {
   const cookies = cookie.parse(req.headers.cookie || '');
   const auth_token = cookies.auth_token;
-  const correctPassword = process.env.APP_PASSWORD;
+  const correctPassword = (process.env.APP_PASSWORD || '').trim();
 
   if (!correctPassword) {
     return res.status(500).json({ authenticated: false });

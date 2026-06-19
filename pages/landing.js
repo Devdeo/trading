@@ -50,6 +50,12 @@ export default function Landing() {
   const [futuresData, setFuturesData] = useState(null);
   const [selectedFuturesExpiry, setSelectedFuturesExpiry] = useState('');
   const [filteredFuturesData, setFilteredFuturesData] = useState([]);
+
+  // Contract info expiry dates (from option-chain-contract-info API)
+  const [contractInfoExpiries, setContractInfoExpiries] = useState([]);
+  const [equityContractInfoExpiries, setEquityContractInfoExpiries] = useState([]);
+  // Dynamic symbol list from master-quote
+  const [dynamicSymbols, setDynamicSymbols] = useState([]);
   
   // Combined selection states
   const [searchText, setSearchText] = useState('');
@@ -468,7 +474,9 @@ const [chartData, setChartData] = useState({
     'VEDL', 'VOLTAS', 'WIPRO', 'YESBANK', 'ZOMATO', 'ZYDUSLIFE'
   ].map(sym => ({ value: sym, label: sym, type: 'symbol' }));
 
-  const allItems = [...indices, ...symbols];
+  const baseSymbols = symbols;
+  const allSymbolItems = dynamicSymbols.length > 0 ? dynamicSymbols : baseSymbols;
+  const allItems = [...indices, ...allSymbolItems];
 
   // Filter items based on search text
   const filteredItems = allItems.filter(item =>
@@ -700,54 +708,101 @@ const [chartData, setChartData] = useState({
     }
   };
 
-  // Fetch data on initial load and every 5 seconds when an index is selected
+  // Load master-quote symbols from NSE on mount
+  useEffect(() => {
+    axios.get('/api/master-quote')
+      .then(res => {
+        const raw = res.data;
+        let symbolList = [];
+        if (Array.isArray(raw)) {
+          symbolList = raw.map(s => (typeof s === 'string' ? s : s.symbol || s.Symbol || s.name || '')).filter(Boolean);
+        } else if (raw && typeof raw === 'object') {
+          symbolList = Object.keys(raw);
+        }
+        if (symbolList.length > 0) {
+          setDynamicSymbols(symbolList.map(sym => ({ value: sym, label: sym, type: 'symbol' })));
+        }
+      })
+      .catch(() => { /* keep static list */ });
+  }, []);
+
+  // Fetch contract-info (expiry dates) when an index is selected
+  useEffect(() => {
+    if (!selectedIndex) return;
+    setSelectedExpiry('');
+    setContractInfoExpiries([]);
+    axios.get(`/api/option-chain-contract-info?symbol=${selectedIndex}`)
+      .then(res => {
+        const expiries = res.data?.expiryDates || res.data?.records?.expiryDates || [];
+        if (expiries.length > 0) {
+          setContractInfoExpiries(expiries);
+          setSelectedExpiry(expiries[0]);
+        }
+      })
+      .catch(() => {});
+  }, [selectedIndex]);
+
+  // Fetch index option-chain OI data when index + expiry are ready
   useEffect(() => {
     let isMounted = true;
     const fetchData = async () => {
-      if (!selectedIndex || !isMounted) return;
+      if (!selectedIndex || !selectedExpiry || !isMounted) return;
       try {
-        const response = await axios.get(`/api/option-chain?symbol=${selectedIndex}`);
-        if (isMounted) {
-          setData(response.data);
-        }
+        const response = await axios.get(
+          `/api/option-chain?symbol=${selectedIndex}&type=Indices&expiry=${encodeURIComponent(selectedExpiry)}`
+        );
+        if (isMounted) setData(response.data);
       } catch (error) {
         // Silently retry on next interval
       }
     };
 
     fetchData();
-    const intervalId = setInterval(fetchData, 10000); // Increased interval to 10 seconds
+    const intervalId = setInterval(fetchData, 10000);
     return () => {
       isMounted = false;
       clearInterval(intervalId);
     };
-  }, [selectedIndex]);
+  }, [selectedIndex, selectedExpiry]);
 
-  // Fetch futures data when a symbol is selected
+  // Fetch contract-info (expiry dates) when a stock symbol is selected
+  useEffect(() => {
+    if (!selectedSymbol) return;
+    setSelectedFuturesExpiry('');
+    setEquityContractInfoExpiries([]);
+    axios.get(`/api/option-chain-contract-info?symbol=${selectedSymbol}`)
+      .then(res => {
+        const expiries = res.data?.expiryDates || res.data?.records?.expiryDates || [];
+        if (expiries.length > 0) {
+          setEquityContractInfoExpiries(expiries);
+          setSelectedFuturesExpiry(expiries[0]);
+        }
+      })
+      .catch(() => {});
+  }, [selectedSymbol]);
+
+  // Fetch equity option-chain OI data when symbol + expiry are ready
   useEffect(() => {
     let isMounted = true;
     const fetchFuturesData = async () => {
-      if (!selectedSymbol || !isMounted) return;
+      if (!selectedSymbol || !selectedFuturesExpiry || !isMounted) return;
       try {
-        const response = await axios.get(`/api/futures-data?symbol=${selectedSymbol}`);
-        
-        if (isMounted) {
-          setFuturesData(response.data);
-          
-        }
+        const response = await axios.get(
+          `/api/futures-data?symbol=${selectedSymbol}&type=Equity&expiry=${encodeURIComponent(selectedFuturesExpiry)}`
+        );
+        if (isMounted) setFuturesData(response.data);
       } catch (error) {
         // Silently retry on next interval
       }
     };
 
     fetchFuturesData();
-    const intervalId = setInterval(fetchFuturesData, 10000); // Fetch every 10 seconds
-
+    const intervalId = setInterval(fetchFuturesData, 10000);
     return () => {
       isMounted = false;
       clearInterval(intervalId);
     };
-  }, [selectedSymbol]);
+  }, [selectedSymbol, selectedFuturesExpiry]);
 
   // Filter the data based on the selected expiry date
   useEffect(() => {
@@ -1253,10 +1308,12 @@ const [chartData, setChartData] = useState({
     setSelectedExpiry(event.target.value);
   };
 
-  // Create an array of unique expiry dates for the dropdown, sorted by date
-  const expiryDates = Array.from(
-    new Set((data.records?.data || []).map((option) => option.expiryDate))
-  ).sort((a, b) => new Date(a) - new Date(b));
+  // Use contract-info expiry dates (from API) when available, fall back to extracting from data
+  const expiryDates = contractInfoExpiries.length > 0
+    ? contractInfoExpiries
+    : Array.from(
+        new Set((data.records?.data || []).map((option) => option.expiryDate))
+      ).sort((a, b) => new Date(a) - new Date(b));
 
   
 
@@ -1426,10 +1483,10 @@ const [chartData, setChartData] = useState({
               </div>
             )}
 
-            {selectedSymbol && futuresData && Array.isArray(futuresData.records?.expiryDates) && (
+            {selectedSymbol && equityContractInfoExpiries.length > 0 && (
               <div style={{ flex: '1', minWidth: '200px' }}>
                 <label htmlFor="futures-expiry-date" style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold' }}>
-                  Select Futures Expiry Date:
+                  Select Expiry Date:
                 </label>
                 <select
                   id="futures-expiry-date"
@@ -1444,7 +1501,7 @@ const [chartData, setChartData] = useState({
                   }}
                 >
                   <option value="">-- Select --</option>
-                  {futuresData.records.expiryDates.map((date, index) => (
+                  {equityContractInfoExpiries.map((date, index) => (
                     <option key={index} value={date}>
                       {date}
                     </option>
