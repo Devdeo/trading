@@ -170,6 +170,29 @@ export default function Landing() {
     loading: false
   });
 
+  // Commodity states
+  const [commoditySymbols, setCommoditySymbols] = useState([]); // [{symbol, expiries}]
+  const [selectedCommodity, setSelectedCommodity] = useState('');
+  const [commodityRawData, setCommodityRawData] = useState(null); // full option-chain-com response (all expiries)
+  const [commodityAllExpiries, setCommodityAllExpiries] = useState([]); // unique expiry dates
+  const [selectedCommodityExpiry, setSelectedCommodityExpiry] = useState('');
+  const [filteredCommodityData, setFilteredCommodityData] = useState([]);
+  const [commodityPcr, setCommodityPcr] = useState('');
+  const [commodityOiLastUpdate, setCommodityOiLastUpdate] = useState(null);
+  const [commodityChartData, setCommodityChartData] = useState({
+    series: [],
+    options: {
+      chart: { type: 'bar', toolbar: { show: true } },
+      plotOptions: { bar: { horizontal: true, columnWidth: '70%', dataLabels: { position: 'top' } } },
+      dataLabels: { enabled: true, offsetY: 0, style: { fontSize: '10px', colors: ['#000000'] } },
+      xaxis: { categories: [] },
+      yaxis: { labels: { style: { fontSize: '12px' } } },
+      legend: { show: true, position: 'top' },
+      colors: ['#FF0000', '#008000', '#FFD700', '#0000FF'],
+      title: { text: 'Commodity Open Interest', align: 'center', style: { fontSize: '16px', fontWeight: 'bold' } },
+    },
+  });
+
   // Chart controls
   const [isHorizontal, setIsHorizontal] = useState(true);
   const [strikeRange, setStrikeRange] = useState(3); // Number of strikes before and after ATM
@@ -840,6 +863,94 @@ const [chartData, setChartData] = useState({
   }, [selectedSymbol, selectedFuturesExpiry]);
 
 
+  // Fetch commodity symbol list on mount
+  useEffect(() => {
+    axios.get('/api/commodity-master')
+      .then(res => setCommoditySymbols(res.data?.symbols || []))
+      .catch(() => {});
+  }, []);
+
+  // Fetch commodity option-chain when a commodity is selected
+  useEffect(() => {
+    if (!selectedCommodity) return;
+    setSelectedCommodityExpiry('');
+    setCommodityAllExpiries([]);
+    setCommodityRawData(null);
+    setFilteredCommodityData([]);
+
+    const fetchCom = async () => {
+      try {
+        const res = await axios.get(`/api/option-chain-com?symbol=${encodeURIComponent(selectedCommodity)}`);
+        const raw = res.data;
+        setCommodityRawData(raw);
+        // Extract unique expiry dates (records have expiryDate field directly)
+        const all = raw.records?.data || [];
+        const expiries = [...new Set(all.map(r => r.expiryDate).filter(Boolean))].sort(
+          (a, b) => new Date(a.split('-').reverse().join('-')) - new Date(b.split('-').reverse().join('-'))
+        );
+        setCommodityAllExpiries(expiries);
+        if (expiries.length > 0) setSelectedCommodityExpiry(expiries[0]);
+      } catch { /* silent */ }
+    };
+
+    fetchCom();
+    const id = setInterval(fetchCom, 60000);
+    return () => clearInterval(id);
+  }, [selectedCommodity]);
+
+  // Filter commodity data client-side when expiry changes (all data already in memory)
+  useEffect(() => {
+    if (!commodityRawData || !selectedCommodityExpiry) { setFilteredCommodityData([]); return; }
+    const all = commodityRawData.records?.data || [];
+    const filtered = all.filter(r => r.expiryDate === selectedCommodityExpiry);
+    setFilteredCommodityData(filtered);
+  }, [selectedCommodityExpiry, commodityRawData]);
+
+  // Update commodity chart when filtered data changes
+  useEffect(() => {
+    if (filteredCommodityData.length === 0) return;
+
+    const sorted = [...filteredCommodityData].sort((a, b) => b.strikePrice - a.strikePrice);
+
+    // Estimate ATM: use the strike with the highest combined OI
+    const atmRecord = sorted.reduce((best, r) => {
+      const oi = (r.CE?.openInterest || 0) + (r.PE?.openInterest || 0);
+      return oi > ((best.CE?.openInterest || 0) + (best.PE?.openInterest || 0)) ? r : best;
+    }, sorted[0]);
+
+    const atmIdx = sorted.findIndex(r => r.strikePrice === atmRecord.strikePrice);
+    const start = Math.max(0, atmIdx - strikeRange);
+    const end = Math.min(sorted.length, atmIdx + strikeRange + 1);
+    const slice = sorted.slice(start, end);
+
+    const ceOI = slice.map(r => r.CE?.openInterest || 0);
+    const peOI = slice.map(r => r.PE?.openInterest || 0);
+    const ceCh = slice.map(r => r.CE?.changeinOpenInterest || 0);
+    const peCh = slice.map(r => r.PE?.changeinOpenInterest || 0);
+
+    const totalCE = ceOI.reduce((s, v) => s + v, 0);
+    const totalPE = peOI.reduce((s, v) => s + v, 0);
+    const pcr = totalCE > 0 ? (totalPE / totalCE).toFixed(2) : 'N/A';
+    setCommodityPcr(pcr);
+
+    setCommodityChartData(prev => ({
+      ...prev,
+      series: [
+        { name: 'CE Open Interest', data: ceOI },
+        { name: 'PE Open Interest', data: peOI },
+        { name: 'CE Change OI', data: ceCh },
+        { name: 'PE Change OI', data: peCh },
+      ],
+      options: {
+        ...prev.options,
+        plotOptions: { bar: { horizontal: isHorizontal, columnWidth: '70%', dataLabels: { position: 'top' } } },
+        xaxis: { categories: slice.map(r => r.strikePrice) },
+        title: { text: `${selectedCommodity} Open Interest (${selectedCommodityExpiry})`, align: 'center', style: { fontSize: '16px', fontWeight: 'bold' } },
+      },
+    }));
+    setCommodityOiLastUpdate(new Date());
+  }, [filteredCommodityData, strikeRange, isHorizontal, selectedCommodity, selectedCommodityExpiry]);
+
   // Update chart data and compute PCR when filtered data changes
   useEffect(() => {
     if (filteredData.length > 0) {
@@ -1377,6 +1488,22 @@ const [chartData, setChartData] = useState({
           }}
         >
           ₿ Crypto
+        </button>
+        <button
+          onClick={() => handleTabChange('commodities')}
+          style={{
+            padding: '12px 24px',
+            border: 'none',
+            backgroundColor: activeTab === 'commodities' ? '#007bff' : 'transparent',
+            color: activeTab === 'commodities' ? 'white' : '#007bff',
+            cursor: 'pointer',
+            fontSize: '16px',
+            fontWeight: 'bold',
+            borderRadius: '8px 8px 0 0',
+            transition: 'all 0.3s ease'
+          }}
+        >
+          🛢️ Commodities
         </button>
       </div>
 
@@ -2144,6 +2271,134 @@ const [chartData, setChartData] = useState({
               </div>
             )}
           </div>
+        </div>
+      )}
+
+      {/* Commodities Tab */}
+      {activeTab === 'commodities' && (
+        <div>
+          {/* Controls */}
+          <div style={{ marginBottom: '20px', display: 'flex', gap: '15px', alignItems: 'flex-end', flexWrap: 'wrap' }}>
+            {/* Symbol selector */}
+            <div style={{ flex: '1', minWidth: '180px' }}>
+              <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold' }}>
+                Commodity Symbol:
+              </label>
+              <select
+                value={selectedCommodity}
+                onChange={e => setSelectedCommodity(e.target.value)}
+                style={{ width: '100%', padding: '10px 12px', fontSize: '14px', border: '2px solid #007bff', borderRadius: '6px' }}
+              >
+                <option value="">-- Select Commodity --</option>
+                {commoditySymbols.map(({ symbol }) => (
+                  <option key={symbol} value={symbol}>{symbol}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Expiry selector */}
+            {selectedCommodity && commodityAllExpiries.length > 0 && (
+              <div style={{ flex: '1', minWidth: '180px' }}>
+                <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold' }}>
+                  Expiry Date:
+                </label>
+                <select
+                  value={selectedCommodityExpiry}
+                  onChange={e => setSelectedCommodityExpiry(e.target.value)}
+                  style={{ width: '100%', padding: '10px 12px', fontSize: '14px', border: '1px solid #ccc', borderRadius: '6px' }}
+                >
+                  {commodityAllExpiries.map(d => (
+                    <option key={d} value={d}>{d}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {/* Strike range controls */}
+            {filteredCommodityData.length > 0 && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ fontWeight: 'bold' }}>Strike Range:</span>
+                <button
+                  onClick={() => setStrikeRange(s => Math.max(1, s - 1))}
+                  style={{ padding: '4px 10px', backgroundColor: '#dc3545', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '16px' }}
+                >-</button>
+                <span style={{ minWidth: '20px', textAlign: 'center' }}>{strikeRange}</span>
+                <button
+                  onClick={() => setStrikeRange(s => Math.min(20, s + 1))}
+                  style={{ padding: '4px 10px', backgroundColor: '#28a745', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '16px' }}
+                >+</button>
+              </div>
+            )}
+          </div>
+
+          {/* Loading state */}
+          {selectedCommodity && !commodityRawData && (
+            <div style={{ textAlign: 'center', padding: '40px', color: '#6c757d', fontSize: '16px' }}>
+              ⏳ Loading {selectedCommodity} option chain data...
+            </div>
+          )}
+
+          {/* No data */}
+          {commodityRawData && filteredCommodityData.length === 0 && (
+            <div style={{ textAlign: 'center', padding: '40px', color: '#6c757d', fontSize: '16px' }}>
+              No option chain data available for {selectedCommodity} on {selectedCommodityExpiry}.
+            </div>
+          )}
+
+          {/* PCR */}
+          {filteredCommodityData.length > 0 && (
+            <div style={{ display: 'flex', justifyContent: 'center', margin: '10px 0 20px', padding: '15px', backgroundColor: '#f5f5f5', borderRadius: '8px', gap: '40px', flexWrap: 'wrap' }}>
+              <div style={{ textAlign: 'center' }}>
+                <strong>Symbol</strong>
+                <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#343a40' }}>{selectedCommodity}</div>
+              </div>
+              <div style={{ textAlign: 'center' }}>
+                <strong>Expiry</strong>
+                <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#343a40' }}>{selectedCommodityExpiry}</div>
+              </div>
+              <div style={{ textAlign: 'center' }}>
+                <strong>PCR</strong>
+                <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#007bff' }}>{commodityPcr || 'N/A'}</div>
+              </div>
+              <div style={{ textAlign: 'center' }}>
+                <strong>Total Records</strong>
+                <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#28a745' }}>{filteredCommodityData.length}</div>
+              </div>
+            </div>
+          )}
+
+          {/* OI Chart */}
+          {filteredCommodityData.length > 0 && (
+            <div>
+              <ReactApexChart
+                options={commodityChartData.options}
+                series={commodityChartData.series}
+                type="bar"
+                height={Math.max(500, (strikeRange * 2 + 1) * 50 + 150)}
+              />
+              {commodityOiLastUpdate && (
+                <div style={{ textAlign: 'center', fontSize: '11px', color: '#6c757d', marginTop: '5px' }}>
+                  Last Update: {new Date(commodityOiLastUpdate).toLocaleString()}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Prompt to select */}
+          {!selectedCommodity && (
+            <div style={{ textAlign: 'center', padding: '60px 20px', color: '#6c757d' }}>
+              <div style={{ fontSize: '48px', marginBottom: '16px' }}>🛢️</div>
+              <div style={{ fontSize: '18px', fontWeight: 'bold', marginBottom: '8px' }}>Select a Commodity</div>
+              <div style={{ fontSize: '14px' }}>
+                Choose a commodity from the dropdown above to view its option chain OI data.
+              </div>
+              {commoditySymbols.length > 0 && (
+                <div style={{ marginTop: '16px', fontSize: '13px', color: '#868e96' }}>
+                  Available: {commoditySymbols.map(s => s.symbol).join(', ')}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 

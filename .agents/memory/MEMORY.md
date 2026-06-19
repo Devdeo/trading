@@ -1,0 +1,2 @@
+- [NSE API structure](nse-api-structure.md) — v3 option-chain uses `expiryDates` (string) on record, CE/PE `expiryDate` in "DD-MM-YYYY" format; commodity chain uses `expiryDate` directly on record
+- [NSE caching & rate limits](nse-caching.md) — NSE blocks repeated requests; cache 3min, fallback 30min, poll 60s; pre-warm all expiries on index select
