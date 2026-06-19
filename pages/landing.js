@@ -179,6 +179,17 @@ export default function Landing() {
   const [filteredCommodityData, setFilteredCommodityData] = useState([]);
   const [commodityPcr, setCommodityPcr] = useState('');
   const [commodityOiLastUpdate, setCommodityOiLastUpdate] = useState(null);
+  // Commodity candlestick
+  const [commodityCandlestickTimeframe, setCommodityCandlestickTimeframe] = useState('1h');
+  const [commodityCandlestickData, setCommodityCandlestickData] = useState([]);
+  const [commodityCandlestickLastUpdate, setCommodityCandlestickLastUpdate] = useState(null);
+  // Real-time refresh: manual trigger keys + global ticker for countdowns
+  const [oiRefreshKey, setOiRefreshKey] = useState(0);
+  const [equityRefreshKey, setEquityRefreshKey] = useState(0);
+  const [commodityOiRefreshKey, setCommodityOiRefreshKey] = useState(0);
+  const [commodityCanRefreshKey, setCommodityCanRefreshKey] = useState(0);
+  const [ticker, setTicker] = useState(0); // increments every second
+  const commodityExpiryInitRef = useRef(false); // tracks first-load for commodity expiry
   const [commodityChartData, setCommodityChartData] = useState({
     series: [],
     options: {
@@ -789,24 +800,24 @@ const [chartData, setChartData] = useState({
         if (!isMounted) return;
         const raw = response.data;
         setData(raw);
-        // Set filteredData directly — v3 API already filters by expiry server-side
         const options =
           (raw.filtered?.data?.length > 0 ? raw.filtered.data : null) ||
           raw.records?.data ||
           [];
         setFilteredData(options);
+        setOiDataLastUpdate(new Date());
       } catch (error) {
         // Silently retry on next interval
       }
     };
 
     fetchData();
-    const intervalId = setInterval(fetchData, 60000); // 60s — reduce NSE pressure
+    const intervalId = setInterval(fetchData, 60000);
     return () => {
       isMounted = false;
       clearInterval(intervalId);
     };
-  }, [selectedIndex, selectedExpiry]);
+  }, [selectedIndex, selectedExpiry, oiRefreshKey]);
 
   // Fetch contract-info (expiry dates) when a stock symbol is selected
   useEffect(() => {
@@ -843,7 +854,6 @@ const [chartData, setChartData] = useState({
         if (!isMounted) return;
         const raw = response.data;
         setFuturesData(raw);
-        // Set filteredFuturesData directly — v3 API already scoped to chosen expiry
         const options =
           (raw.filtered?.data?.length > 0 ? raw.filtered.data : null) ||
           raw.records?.data ||
@@ -855,13 +865,26 @@ const [chartData, setChartData] = useState({
     };
 
     fetchFuturesData();
-    const intervalId = setInterval(fetchFuturesData, 60000); // 60s
+    const intervalId = setInterval(fetchFuturesData, 60000);
     return () => {
       isMounted = false;
       clearInterval(intervalId);
     };
-  }, [selectedSymbol, selectedFuturesExpiry]);
+  }, [selectedSymbol, selectedFuturesExpiry, equityRefreshKey]);
 
+  // Global 1-second ticker — drives countdown displays without extra state per section
+  useEffect(() => {
+    const id = setInterval(() => setTicker(t => t + 1), 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  // NSE commodity → Yahoo Finance futures symbol mapping
+  const COMMODITY_YAHOO = {
+    CRUDEOIL: 'CL=F', CRUDEOILM: 'CL=F', BRCRUDEOIL: 'BZ=F',
+    GOLD: 'GC=F', GOLDM: 'GC=F', GOLD1G: 'GC=F', GOLD10G: 'GC=F', GOLDGUINEA: 'GC=F',
+    SILVER: 'SI=F', SILVERM: 'SI=F', SILVER100: 'SI=F',
+    COPPER: 'HG=F', NATURALGAS: 'NG=F', NATGASMINI: 'NG=F',
+  };
 
   // Fetch commodity symbol list on mount
   useEffect(() => {
@@ -873,6 +896,8 @@ const [chartData, setChartData] = useState({
   // Fetch commodity option-chain when a commodity is selected
   useEffect(() => {
     if (!selectedCommodity) return;
+    // Reset state on new symbol selection
+    commodityExpiryInitRef.current = false;
     setSelectedCommodityExpiry('');
     setCommodityAllExpiries([]);
     setCommodityRawData(null);
@@ -883,20 +908,51 @@ const [chartData, setChartData] = useState({
         const res = await axios.get(`/api/option-chain-com?symbol=${encodeURIComponent(selectedCommodity)}`);
         const raw = res.data;
         setCommodityRawData(raw);
-        // Extract unique expiry dates (records have expiryDate field directly)
-        const all = raw.records?.data || [];
-        const expiries = [...new Set(all.map(r => r.expiryDate).filter(Boolean))].sort(
-          (a, b) => new Date(a.split('-').reverse().join('-')) - new Date(b.split('-').reverse().join('-'))
-        );
-        setCommodityAllExpiries(expiries);
-        if (expiries.length > 0) setSelectedCommodityExpiry(expiries[0]);
+        setCommodityOiLastUpdate(new Date());
+        // Only set expiry dates on the very first load — don't reset on polling
+        if (!commodityExpiryInitRef.current) {
+          const all = raw.records?.data || [];
+          const expiries = [...new Set(all.map(r => r.expiryDate).filter(Boolean))].sort(
+            (a, b) => new Date(a.split('-').reverse().join('-')) - new Date(b.split('-').reverse().join('-'))
+          );
+          setCommodityAllExpiries(expiries);
+          if (expiries.length > 0) setSelectedCommodityExpiry(expiries[0]);
+          commodityExpiryInitRef.current = true;
+        }
       } catch { /* silent */ }
     };
 
     fetchCom();
     const id = setInterval(fetchCom, 60000);
     return () => clearInterval(id);
-  }, [selectedCommodity]);
+  }, [selectedCommodity, commodityOiRefreshKey]);
+
+  // Fetch commodity candlestick data (Yahoo Finance futures price)
+  useEffect(() => {
+    if (!selectedCommodity) return;
+    const yahooSym = COMMODITY_YAHOO[selectedCommodity.toUpperCase()];
+    if (!yahooSym) return;
+
+    let isMounted = true;
+    const fetchCandle = async () => {
+      try {
+        const range = commodityCandlestickTimeframe === '1d' ? '1mo'
+                    : commodityCandlestickTimeframe === '4h' ? '5d'
+                    : '5d';
+        const res = await axios.get(
+          `/api/candlestick-data?symbol=${encodeURIComponent(yahooSym)}&interval=${commodityCandlestickTimeframe}&range=${range}&isCommodity=true`
+        );
+        if (!isMounted) return;
+        setCommodityCandlestickData(res.data?.data || []);
+        setCommodityCandlestickLastUpdate(new Date());
+      } catch { /* silent */ }
+    };
+
+    fetchCandle();
+    const id = setInterval(fetchCandle, 60000);
+    return () => { isMounted = false; clearInterval(id); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedCommodity, commodityCandlestickTimeframe, commodityCanRefreshKey]);
 
   // Filter commodity data client-side when expiry changes (all data already in memory)
   useEffect(() => {
@@ -1735,11 +1791,24 @@ const [chartData, setChartData] = useState({
             type="bar"
             height={Math.max(500, (strikeRange * 2 + 1) * 50 + 150)}
           />
-          {oiDataLastUpdate && (
-            <div style={{ textAlign: 'center', fontSize: '11px', color: '#6c757d', marginTop: '5px' }}>
-              Last OI Data Update: {new Date(oiDataLastUpdate).toLocaleString()}
-            </div>
-          )}
+          {/* Refresh bar */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px', marginTop: '6px', flexWrap: 'wrap' }}>
+            {oiDataLastUpdate && (
+              <span style={{ fontSize: '11px', color: '#6c757d' }}>
+                Last update: {new Date(oiDataLastUpdate).toLocaleTimeString()}
+                {' · Next refresh in '}
+                <strong>{Math.max(0, 60 - Math.floor((Date.now() - new Date(oiDataLastUpdate).getTime()) / 1000))}s</strong>
+              </span>
+            )}
+            <button
+              onClick={() => setOiRefreshKey(k => k + 1)}
+              style={{ padding: '3px 10px', fontSize: '12px', backgroundColor: '#17a2b8', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+            >
+              ↻ Refresh OI
+            </button>
+          </div>
+          {/* Invisible ticker-consumer to force re-render every second */}
+          <span style={{ display: 'none' }}>{ticker}</span>
         </div>
 
         {/* AI Analysis Display */}
@@ -2376,13 +2445,83 @@ const [chartData, setChartData] = useState({
                 type="bar"
                 height={Math.max(500, (strikeRange * 2 + 1) * 50 + 150)}
               />
-              {commodityOiLastUpdate && (
-                <div style={{ textAlign: 'center', fontSize: '11px', color: '#6c757d', marginTop: '5px' }}>
-                  Last Update: {new Date(commodityOiLastUpdate).toLocaleString()}
-                </div>
-              )}
+              {/* OI refresh bar */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px', marginTop: '6px', flexWrap: 'wrap' }}>
+                {commodityOiLastUpdate && (
+                  <span style={{ fontSize: '11px', color: '#6c757d' }}>
+                    OI last update: {new Date(commodityOiLastUpdate).toLocaleTimeString()}
+                    {' · Next in '}
+                    <strong>{Math.max(0, 60 - Math.floor((Date.now() - new Date(commodityOiLastUpdate).getTime()) / 1000))}s</strong>
+                  </span>
+                )}
+                <button
+                  onClick={() => setCommodityOiRefreshKey(k => k + 1)}
+                  style={{ padding: '3px 10px', fontSize: '12px', backgroundColor: '#17a2b8', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+                >↻ Refresh OI</button>
+                <span style={{ display: 'none' }}>{ticker}</span>
+              </div>
             </div>
           )}
+
+          {/* Commodity Candlestick Price Chart */}
+          {selectedCommodity && (() => {
+            const yahooSym = COMMODITY_YAHOO[selectedCommodity.toUpperCase()];
+            if (!yahooSym) return (
+              <div style={{ textAlign: 'center', padding: '20px', color: '#6c757d', fontSize: '13px', backgroundColor: '#f8f9fa', borderRadius: '8px', marginTop: '20px' }}>
+                Price chart not available for {selectedCommodity} (no international futures equivalent)
+              </div>
+            );
+            return (
+              <div style={{ marginTop: '24px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px', flexWrap: 'wrap', gap: '10px' }}>
+                  <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 'bold' }}>
+                    📈 {selectedCommodity} Price Chart ({yahooSym})
+                  </h3>
+                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+                    {['15m','1h','1d'].map(tf => (
+                      <button
+                        key={tf}
+                        onClick={() => setCommodityCandlestickTimeframe(tf)}
+                        style={{
+                          padding: '4px 10px', fontSize: '12px', border: 'none', borderRadius: '4px', cursor: 'pointer',
+                          backgroundColor: commodityCandlestickTimeframe === tf ? '#007bff' : '#e9ecef',
+                          color: commodityCandlestickTimeframe === tf ? 'white' : '#495057',
+                          fontWeight: commodityCandlestickTimeframe === tf ? 'bold' : 'normal',
+                        }}
+                      >{tf}</button>
+                    ))}
+                    <button
+                      onClick={() => setCommodityCanRefreshKey(k => k + 1)}
+                      style={{ padding: '4px 10px', fontSize: '12px', backgroundColor: '#17a2b8', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+                    >↻ Refresh</button>
+                  </div>
+                </div>
+                {commodityCandlestickData.length > 0 ? (
+                  <>
+                    <LightweightChart
+                      data={commodityCandlestickData}
+                      title={`${selectedCommodity} — ${yahooSym} (${commodityCandlestickTimeframe})`}
+                      currencySymbol="$"
+                    />
+                    {commodityCandlestickLastUpdate && (
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px', marginTop: '4px' }}>
+                        <span style={{ fontSize: '11px', color: '#6c757d' }}>
+                          Price last update: {new Date(commodityCandlestickLastUpdate).toLocaleTimeString()}
+                          {' · Next in '}
+                          <strong>{Math.max(0, 60 - Math.floor((Date.now() - new Date(commodityCandlestickLastUpdate).getTime()) / 1000))}s</strong>
+                        </span>
+                        <span style={{ display: 'none' }}>{ticker}</span>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <div style={{ textAlign: 'center', padding: '30px', color: '#6c757d' }}>
+                    ⏳ Loading price chart...
+                  </div>
+                )}
+              </div>
+            );
+          })()}
 
           {/* Prompt to select */}
           {!selectedCommodity && (

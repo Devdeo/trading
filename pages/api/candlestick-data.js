@@ -6,26 +6,30 @@ let cache = new Map();
 
 async function handler(req, res) {
   try {
-    const { symbol, interval = '5m', range = '5d', isIndex = 'false' } = req.query;
+    const { symbol, interval = '5m', range = '5d', isIndex = 'false', isCommodity = 'false' } = req.query;
     
     if (!symbol) {
       return res.status(400).json({ error: 'Symbol is required' });
     }
 
     // Create cache key
-    const cacheKey = `${symbol}-${interval}-${range}-${isIndex}`;
+    const cacheKey = `${symbol}-${interval}-${range}-${isIndex}-${isCommodity}`;
     const now = Date.now();
     
-    // Check cache (valid for 30 seconds for real-time data)
+    // Check cache (valid for 60 seconds)
     if (cache.has(cacheKey)) {
       const cachedData = cache.get(cacheKey);
-      if (now - cachedData.timestamp < 30000) {
+      if (now - cachedData.timestamp < 60000) {
         return res.status(200).json(cachedData.data);
       }
     }
 
     // Function to get Yahoo Finance symbol format
-    const getYahooSymbol = (symbol, isIndex) => {
+    const getYahooSymbol = (symbol, isIndex, isCommodity) => {
+      if (isCommodity === 'true') {
+        // Commodity futures: symbol is already a Yahoo Finance futures ticker (e.g. CL=F)
+        return symbol;
+      }
       if (isIndex === 'true') {
         const indexMap = {
           'NIFTY': '^NSEI',
@@ -41,7 +45,7 @@ async function handler(req, res) {
       }
     };
 
-    const yahooSymbol = getYahooSymbol(symbol, isIndex);
+    const yahooSymbol = getYahooSymbol(symbol, isIndex, isCommodity);
     const url = `https://query1.finance.yahoo.com/v8/finance/chart/${yahooSymbol}?interval=${interval}&range=${range}`;
     
     console.log('Fetching candlestick data from:', url);
