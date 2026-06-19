@@ -726,17 +726,28 @@ const [chartData, setChartData] = useState({
       .catch(() => { /* keep static list */ });
   }, []);
 
-  // Fetch contract-info (expiry dates) when an index is selected
+  // Fetch contract-info (expiry dates) when an index is selected; pre-warm all expiry caches
   useEffect(() => {
     if (!selectedIndex) return;
     setSelectedExpiry('');
     setContractInfoExpiries([]);
+    setData([]);
+    setFilteredData([]);
+
+    const isIdx = ['NIFTY', 'BANKNIFTY', 'FINNIFTY', 'MIDCPNIFTY', 'NIFTYNXT50'].includes(selectedIndex.toUpperCase());
+    const chainType = isIdx ? 'Indices' : 'Equity';
+
     axios.get(`/api/option-chain-contract-info?symbol=${selectedIndex}`)
       .then(res => {
         const expiries = res.data?.expiryDates || res.data?.records?.expiryDates || [];
         if (expiries.length > 0) {
           setContractInfoExpiries(expiries);
           setSelectedExpiry(expiries[0]);
+          // Pre-warm caches for all expiries in the background (fire & forget)
+          expiries.slice(1).forEach(exp => {
+            axios.get(`/api/option-chain?symbol=${selectedIndex}&type=${chainType}&expiry=${encodeURIComponent(exp)}`)
+              .catch(() => {});
+          });
         }
       })
       .catch(() => {});
@@ -747,18 +758,27 @@ const [chartData, setChartData] = useState({
     let isMounted = true;
     const fetchData = async () => {
       if (!selectedIndex || !selectedExpiry || !isMounted) return;
+      const isIdx = ['NIFTY', 'BANKNIFTY', 'FINNIFTY', 'MIDCPNIFTY', 'NIFTYNXT50'].includes(selectedIndex.toUpperCase());
       try {
         const response = await axios.get(
-          `/api/option-chain?symbol=${selectedIndex}&type=Indices&expiry=${encodeURIComponent(selectedExpiry)}`
+          `/api/option-chain?symbol=${selectedIndex}&type=${isIdx ? 'Indices' : 'Equity'}&expiry=${encodeURIComponent(selectedExpiry)}`
         );
-        if (isMounted) setData(response.data);
+        if (!isMounted) return;
+        const raw = response.data;
+        setData(raw);
+        // Set filteredData directly — v3 API already filters by expiry server-side
+        const options =
+          (raw.filtered?.data?.length > 0 ? raw.filtered.data : null) ||
+          raw.records?.data ||
+          [];
+        setFilteredData(options);
       } catch (error) {
         // Silently retry on next interval
       }
     };
 
     fetchData();
-    const intervalId = setInterval(fetchData, 10000);
+    const intervalId = setInterval(fetchData, 60000); // 60s — reduce NSE pressure
     return () => {
       isMounted = false;
       clearInterval(intervalId);
@@ -770,12 +790,19 @@ const [chartData, setChartData] = useState({
     if (!selectedSymbol) return;
     setSelectedFuturesExpiry('');
     setEquityContractInfoExpiries([]);
+    setFuturesData([]);
+    setFilteredFuturesData([]);
     axios.get(`/api/option-chain-contract-info?symbol=${selectedSymbol}`)
       .then(res => {
         const expiries = res.data?.expiryDates || res.data?.records?.expiryDates || [];
         if (expiries.length > 0) {
           setEquityContractInfoExpiries(expiries);
           setSelectedFuturesExpiry(expiries[0]);
+          // Pre-warm caches for remaining expiries
+          expiries.slice(1).forEach(exp => {
+            axios.get(`/api/futures-data?symbol=${selectedSymbol}&type=Equity&expiry=${encodeURIComponent(exp)}`)
+              .catch(() => {});
+          });
         }
       })
       .catch(() => {});
@@ -790,46 +817,37 @@ const [chartData, setChartData] = useState({
         const response = await axios.get(
           `/api/futures-data?symbol=${selectedSymbol}&type=Equity&expiry=${encodeURIComponent(selectedFuturesExpiry)}`
         );
-        if (isMounted) setFuturesData(response.data);
+        if (!isMounted) return;
+        const raw = response.data;
+        setFuturesData(raw);
+        // Set filteredFuturesData directly — v3 API already scoped to chosen expiry
+        const options =
+          (raw.filtered?.data?.length > 0 ? raw.filtered.data : null) ||
+          raw.records?.data ||
+          [];
+        setFilteredFuturesData(options);
       } catch (error) {
         // Silently retry on next interval
       }
     };
 
     fetchFuturesData();
-    const intervalId = setInterval(fetchFuturesData, 10000);
+    const intervalId = setInterval(fetchFuturesData, 60000); // 60s
     return () => {
       isMounted = false;
       clearInterval(intervalId);
     };
   }, [selectedSymbol, selectedFuturesExpiry]);
 
-  // Filter the data based on the selected expiry date
-  useEffect(() => {
-    if (data && selectedExpiry) {
-      const options = data.records?.data || [];
-      const filtered = options.filter(
-        (option) => option.expiryDate === selectedExpiry
-      );
-      setFilteredData(filtered);
-    }
-  }, [selectedExpiry, data]);
-
-  // Filter futures data based on the selected expiry date
-  useEffect(() => {
-    if (futuresData && selectedFuturesExpiry) {
-      const filtered = futuresData.records?.data?.filter(
-        (item) => item.expiryDate === selectedFuturesExpiry
-      ) || [];
-      setFilteredFuturesData(filtered);
-    }
-  }, [selectedFuturesExpiry, futuresData]);
 
   // Update chart data and compute PCR when filtered data changes
   useEffect(() => {
     if (filteredData.length > 0) {
-      // Get the underlying value (if available)
-      const underlyingValue = data.records?.underlyingValue || 0;
+      // Get the underlying value (if available) — v3 API may put it in different places
+      const underlyingValue =
+        data.records?.underlyingValue ||
+        data.filtered?.underlyingValue ||
+        0;
 
       // Sort filtered data by strike price in descending order first
       const sortedFilteredData = [...filteredData].sort((a, b) => b.strikePrice - a.strikePrice);
